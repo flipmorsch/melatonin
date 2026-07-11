@@ -18,9 +18,17 @@ export function kvToText(kv: Record<string, string>): string {
     return Object.entries(kv ?? {}).map(([k, v]) => `${k}: ${v}`).join('\n');
 }
 
-export function prettyBody(res: main.ResponseData): string {
+/** First-char heuristic: does this body text look like JSON? (ADR 0004) */
+export const looksJson = (s: string) => /^\s*[{["]/.test(s);
+
+/** JSON responses under the pretty-print cap get colors and folding. */
+export function isJsonBody(res: main.ResponseData): boolean {
     const contentType = res.headers['Content-Type']?.[0] ?? '';
-    if (contentType.includes('json') && res.size < PRETTY_PRINT_LIMIT) {
+    return contentType.includes('json') && res.size < PRETTY_PRINT_LIMIT;
+}
+
+export function prettyBody(res: main.ResponseData): string {
+    if (isJsonBody(res)) {
         try {
             return JSON.stringify(JSON.parse(res.body), null, 2);
         } catch {

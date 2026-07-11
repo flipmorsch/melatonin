@@ -1,11 +1,12 @@
 import {ReactNode, useEffect, useState} from 'react';
 import {
     Accordion, ActionIcon, Autocomplete, Badge, Button, Group, NativeSelect,
-    PasswordInput, Stack, Textarea, TextInput,
+    PasswordInput, Stack, TextInput,
 } from '@mantine/core';
 import {SendRequest} from '../../../wailsjs/go/main/App';
 import {main} from '../../../wailsjs/go/models';
-import {METHODS} from '../../lib/kv';
+import {looksJson, METHODS} from '../../lib/kv';
+import {CodeEditor} from '../../components/CodeEditor';
 import {KVEditor, KVRow, newKVRow, rowsFromKV, rowsToKV} from '../../components/KVEditor';
 import {ResponseViewer} from './ResponseViewer';
 
@@ -14,10 +15,12 @@ interface Props {
     selected: {colId: string, req: main.SavedRequest} | null;
     /** Existing folder names across collections, for the folder autocomplete. */
     folders: string[];
+    /** Active environment's variable names, for {{var}} autocomplete. */
+    variables: string[];
     onSave: (colId: string, req: main.SavedRequest) => Promise<unknown>;
 }
 
-export function RequestView({selected, folders, onSave}: Props) {
+export function RequestView({selected, folders, variables, onSave}: Props) {
     const [name, setName] = useState('');
     const [folder, setFolder] = useState('');
     const [method, setMethod] = useState('GET');
@@ -106,22 +109,35 @@ export function RequestView({selected, folders, onSave}: Props) {
         (section === 'params' ? setParams : setHeaders)(rows => [...rows, newKVRow()]);
     }
 
+    function formatBody() {
+        try {
+            setBody(JSON.stringify(JSON.parse(body), null, 2));
+        } catch {
+            // invalid JSON — the editor's lint underline points at the problem
+        }
+    }
+
     const hasBody = !['GET', 'HEAD'].includes(method);
 
-    /** Accordion header with a count badge and an add-row action beside the control. */
-    const sectionControl = (label: string, count: number, onAdd?: () => void, extra?: ReactNode) => (
+    /** Accordion header with a count badge and an action beside the control. */
+    const sectionControl = (label: string, count: number, extra?: ReactNode, action?: ReactNode) => (
         <Group gap={0} wrap="nowrap">
-            <Accordion.Control>
+            {/* Control defaults to width:100%, which squeezes the action out of the row */}
+            <Accordion.Control style={{flex: 1, width: 'auto', minWidth: 0}}>
                 <Group gap="xs">
                     {label}
                     {count > 0 && <Badge size="xs" variant="light" color="gray">{count}</Badge>}
                     {extra}
                 </Group>
             </Accordion.Control>
-            {onAdd &&
-                <ActionIcon size="sm" variant="subtle" color="gray" mx="xs"
-                    title={`Add ${label.toLowerCase()} row`} onClick={onAdd}>+</ActionIcon>}
+            {action && <Group gap={0} wrap="nowrap" style={{flexShrink: 0}}>{action}</Group>}
         </Group>
+    );
+
+    const addIcon = (section: 'params' | 'headers') => (
+        <ActionIcon size="sm" variant="subtle" color="gray" mx="xs"
+            title={`Add ${section === 'params' ? 'param' : 'header'} row`}
+            onClick={() => addRow(section)}>+</ActionIcon>
     );
 
     return (
@@ -169,7 +185,7 @@ export function RequestView({selected, folders, onSave}: Props) {
             <Accordion multiple value={open} onChange={setOpen} variant="separated"
                 styles={{label: {paddingTop: 8, paddingBottom: 8}}}>
                 <Accordion.Item value="params">
-                    {sectionControl('Query Params', rowsToKV(params).length, () => addRow('params'))}
+                    {sectionControl('Query Params', rowsToKV(params).length, undefined, addIcon('params'))}
                     <Accordion.Panel>
                         <KVEditor
                             rows={params} onChange={setParams}
@@ -179,8 +195,9 @@ export function RequestView({selected, folders, onSave}: Props) {
                 </Accordion.Item>
 
                 <Accordion.Item value="headers">
-                    {sectionControl('Headers', rowsToKV(headers).length, () => addRow('headers'),
-                        authType && <Badge size="xs" variant="light">auth</Badge>)}
+                    {sectionControl('Headers', rowsToKV(headers).length,
+                        authType && <Badge size="xs" variant="light">auth</Badge>,
+                        addIcon('headers'))}
                     <Accordion.Panel>
                         <Stack gap="xs">
                             <Group gap="xs" wrap="nowrap">
@@ -230,13 +247,19 @@ export function RequestView({selected, folders, onSave}: Props) {
 
                 {hasBody &&
                     <Accordion.Item value="body">
-                        {sectionControl('Body', 0, undefined,
-                            body && <Badge size="xs" variant="light" color="gray">{body.length} chars</Badge>)}
+                        {sectionControl('Body', 0,
+                            body && <Badge size="xs" variant="light" color="gray" tt="none">{body.length} chars</Badge>,
+                            <Button size="compact-xs" variant="subtle" color="gray" mx="xs"
+                                disabled={!looksJson(body)}
+                                title="Reformat JSON with 2-space indent"
+                                onClick={formatBody}>Format</Button>)}
                         <Accordion.Panel>
-                            <Textarea
-                                className="mono-input" autosize minRows={4} maxRows={14}
+                            <CodeEditor
+                                key={selected?.req.id ?? 'scratch'}
                                 value={body}
-                                onChange={e => setBody(e.target.value)}
+                                onChange={setBody}
+                                json={looksJson(body)}
+                                variables={variables}
                                 placeholder="Request body"
                             />
                         </Accordion.Panel>

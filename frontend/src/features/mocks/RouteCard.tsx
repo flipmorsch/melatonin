@@ -1,5 +1,6 @@
-import {ActionIcon, Group, NativeSelect, Paper, Textarea, TextInput} from '@mantine/core';
-import {METHODS} from '../../lib/kv';
+import {Group, NativeSelect, Paper, Textarea, TextInput} from '@mantine/core';
+import {looksJson, METHODS} from '../../lib/kv';
+import {CodeEditor} from '../../components/CodeEditor';
 
 export interface RouteDraft {
     id: string;
@@ -13,10 +14,9 @@ export interface RouteDraft {
 interface Props {
     draft: RouteDraft;
     onChange: (patch: Partial<RouteDraft>) => void;
-    onRemove: () => void;
 }
 
-export function RouteCard({draft, onChange, onRemove}: Props) {
+export function RouteCard({draft, onChange}: Props) {
     return (
         <Paper withBorder radius="lg" p="sm" bg="dark.6" style={{flexShrink: 0}}>
             <Group gap="xs" wrap="nowrap" mb="xs">
@@ -38,8 +38,6 @@ export function RouteCard({draft, onChange, onRemove}: Props) {
                     onChange={e => onChange({status: e.target.value})}
                     placeholder="200"
                 />
-                <ActionIcon size="sm" variant="subtle" color="gray" title="Remove route"
-                    onClick={onRemove}>✕</ActionIcon>
             </Group>
             <Group gap="sm" align="stretch" wrap="nowrap">
                 <Textarea
@@ -48,10 +46,12 @@ export function RouteCard({draft, onChange, onRemove}: Props) {
                     onChange={e => onChange({headersText: e.target.value})}
                     placeholder={'Response headers:\nContent-Type: application/json'}
                 />
-                <Textarea
-                    style={{flex: 1}} size="xs" className="mono-input" rows={2}
+                <CodeEditor
+                    style={{flex: 1, minWidth: 0}}
                     value={draft.body}
-                    onChange={e => onChange({body: e.target.value})}
+                    onChange={v => onChange({body: v})}
+                    json={looksJson(draft.body)}
+                    minHeight={50}
                     placeholder="Response body"
                 />
             </Group>

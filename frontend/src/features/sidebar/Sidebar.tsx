@@ -15,9 +15,13 @@ interface Props {
     mocks: main.MockServer[];
     running: Record<string, number>;
     selectedMockId: string | null;
+    selectedRouteId: string | null;
     onSelectMock: (m: main.MockServer) => void;
     onAddMock: () => void;
     onDeleteMock: (id: string) => void;
+    onSelectRoute: (m: main.MockServer, routeId: string) => void;
+    onAddRoute: (m: main.MockServer) => void;
+    onDeleteRoute: (m: main.MockServer, routeId: string) => void;
 }
 
 export function Sidebar(p: Props) {
@@ -36,9 +40,13 @@ export function Sidebar(p: Props) {
                 mocks={p.mocks}
                 running={p.running}
                 selectedMockId={p.selectedMockId}
+                selectedRouteId={p.selectedRouteId}
                 onSelect={p.onSelectMock}
                 onAdd={p.onAddMock}
                 onDelete={p.onDeleteMock}
+                onSelectRoute={p.onSelectRoute}
+                onAddRoute={p.onAddRoute}
+                onDeleteRoute={p.onDeleteRoute}
             />
         </ScrollArea>
     );

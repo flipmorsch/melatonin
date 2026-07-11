@@ -9,6 +9,8 @@ import {RouteCard, RouteDraft} from './RouteCard';
 
 interface Props {
     mock: main.MockServer;
+    /** Route picked in the sidebar, or null when the server itself is selected. */
+    selectedRouteId: string | null;
     /** Actual listening port when running, undefined when stopped. */
     runningPort: number | undefined;
     log: main.MockLogEntry[];
@@ -39,29 +41,38 @@ function fromDraft(d: RouteDraft): main.MockRoute {
     };
 }
 
-export function MockView({mock, runningPort, log, onSave, onStart, onStop}: Props) {
+export function MockView({mock, selectedRouteId, runningPort, log, onSave, onStart, onStop}: Props) {
     const [name, setName] = useState('');
     const [port, setPort] = useState('9000');
     const [expose, setExpose] = useState(false);
-    const [routes, setRoutes] = useState<RouteDraft[]>([]);
+    const [route, setRoute] = useState<RouteDraft | null>(null);
     const [error, setError] = useState('');
 
     useEffect(() => {
         setName(mock.name);
         setPort(String(mock.port));
         setExpose(mock.exposeOnNetwork);
-        setRoutes((mock.routes ?? []).map(toDraft));
         setError('');
     }, [mock.id]);
 
+    useEffect(() => {
+        const r = (mock.routes ?? []).find(r => r.id === selectedRouteId);
+        setRoute(r ? toDraft(r) : null);
+        // routes live in the sidebar now; the draft reloads on selection change,
+        // not on every mocks refresh, so in-progress edits survive saves
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [mock.id, selectedRouteId]);
+
     const running = runningPort !== undefined;
 
+    // the selected route's edits are merged over the stored routes
     const def = (): main.MockServer => main.MockServer.createFrom({
         id: mock.id,
         name,
         port: parseInt(port, 10) || 0,
         exposeOnNetwork: expose,
-        routes: routes.map(fromDraft),
+        routes: (mock.routes ?? []).map(r =>
+            route && r.id === route.id ? fromDraft(route) : r),
     });
 
     async function save() {
@@ -84,10 +95,6 @@ export function MockView({mock, runningPort, log, onSave, onStart, onStop}: Prop
         } catch (e) {
             setError(String(e));
         }
-    }
-
-    function updateRoute(i: number, patch: Partial<RouteDraft>) {
-        setRoutes(rs => rs.map((r, j) => j === i ? {...r, ...patch} : r));
     }
 
     return (
@@ -124,22 +131,19 @@ export function MockView({mock, runningPort, log, onSave, onStart, onStop}: Prop
 
             <ScrollArea style={{flex: 1}} type="auto">
                 <Stack gap="sm">
-                    <Group justify="space-between">
-                        <SectionLabel>Routes</SectionLabel>
-                        <Button size="compact-xs" variant="default" onClick={() => setRoutes(rs =>
-                            [...rs, {id: '', method: 'GET', path: '/', status: '200', headersText: '', body: ''}])}>
-                            + Add route
-                        </Button>
-                    </Group>
-                    {routes.length === 0 &&
-                        <EmptyState>No routes yet — add one; unmatched requests get a 404</EmptyState>}
-                    {routes.map((r, i) =>
-                        <RouteCard
-                            key={i}
-                            draft={r}
-                            onChange={patch => updateRoute(i, patch)}
-                            onRemove={() => setRoutes(rs => rs.filter((_, j) => j !== i))}
-                        />)}
+                    {route
+                        ? <>
+                            <SectionLabel>Route</SectionLabel>
+                            <RouteCard
+                                draft={route}
+                                onChange={patch => setRoute(r => r ? {...r, ...patch} : r)}
+                            />
+                        </>
+                        : <EmptyState>
+                            {(mock.routes ?? []).length === 0
+                                ? 'No routes yet — use + on the server in the sidebar; unmatched requests get a 404'
+                                : 'Select a route in the sidebar to edit it'}
+                        </EmptyState>}
 
                     <SectionLabel mt="xs">
                         Request Log {running ? '' : '(server stopped — log clears on start)'}

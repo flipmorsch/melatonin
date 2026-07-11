@@ -55,7 +55,8 @@ frontend/src/
 ├── lib/                 pure helpers (kv parsing, grouping, pretty-print)
 ├── hooks/               data access per domain (useCollections, useEnvironments, useMocks)
 ├── components/          shared primitives (Brand, MethodBadge, RunDot,
-│                        EmptyState, SectionLabel, ConfirmDelete)
+│                        EmptyState, SectionLabel, ConfirmDelete, KVEditor, Chevron,
+│                        CodeEditor — the only file touching CodeMirror, ADR 0004)
 └── features/
     ├── sidebar/         Sidebar, CollectionsSection, MocksSection, SidebarRow
     ├── request/         RequestView, ResponseViewer

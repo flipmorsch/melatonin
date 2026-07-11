@@ -20,9 +20,12 @@ function App() {
     const [view, setView] = useState<View>('request');
     const [selected, setSelected] = useState<{colId: string, req: main.SavedRequest} | null>(null);
     const [selectedMockId, setSelectedMockId] = useState('');
+    const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
     const [shellError, setShellError] = useState('');
 
     const environments = envs.envSet?.environments ?? [];
+    const variables = Object.keys(
+        environments.find(e => e.id === envs.envSet?.activeId)?.variables ?? {});
     const selectedMock = mocks.mocks.find(m => m.id === selectedMockId);
     const folders = [...new Set(cols.collections.flatMap(c =>
         (c.requests ?? []).map(r => r.folder).filter(Boolean)))];
@@ -57,8 +60,33 @@ function App() {
 
     function selectMock(m: main.MockServer) {
         setSelectedMockId(m.id);
+        setSelectedRouteId(null);
         setView('mock');
         run(mocks.loadLog(m.id));
+    }
+
+    function selectRoute(m: main.MockServer, routeId: string) {
+        if (selectedMockId !== m.id) run(mocks.loadLog(m.id));
+        setSelectedMockId(m.id);
+        setSelectedRouteId(routeId);
+        setView('mock');
+    }
+
+    async function addRoute(m: main.MockServer) {
+        const saved = await mocks.save(main.MockServer.createFrom({
+            ...m,
+            routes: [...(m.routes ?? []),
+                {id: '', method: 'GET', path: '/', status: 200, headers: {}, body: ''}],
+        }));
+        selectRoute(saved, saved.routes[saved.routes.length - 1].id);
+    }
+
+    function deleteRoute(m: main.MockServer, routeId: string) {
+        if (selectedRouteId === routeId) setSelectedRouteId(null);
+        run(mocks.save(main.MockServer.createFrom({
+            ...m,
+            routes: (m.routes ?? []).filter(r => r.id !== routeId),
+        })));
     }
 
     return (
@@ -104,15 +132,20 @@ function App() {
                     mocks={mocks.mocks}
                     running={mocks.running}
                     selectedMockId={view === 'mock' ? selectedMockId : null}
+                    selectedRouteId={view === 'mock' ? selectedRouteId : null}
                     onSelectMock={selectMock}
                     onAddMock={() => run(addMock())}
                     onDeleteMock={id => {
                         if (selectedMockId === id) {
                             setSelectedMockId('');
+                            setSelectedRouteId(null);
                             setView('request');
                         }
                         run(mocks.remove(id));
                     }}
+                    onSelectRoute={selectRoute}
+                    onAddRoute={m => run(addRoute(m))}
+                    onDeleteRoute={deleteRoute}
                 />
             </AppShell.Navbar>
 
@@ -120,12 +153,14 @@ function App() {
                 {shellError &&
                     <Text size="sm" ff="monospace" c="red.4" mb="xs">{shellError}</Text>}
                 {view === 'request' &&
-                    <RequestView selected={selected} folders={folders} onSave={cols.saveRequest}/>}
+                    <RequestView selected={selected} folders={folders} variables={variables}
+                        onSave={cols.saveRequest}/>}
                 {view === 'environments' &&
                     <EnvironmentsView envSet={envs.envSet} onSave={envs.save} onDelete={envs.remove}/>}
                 {view === 'mock' && selectedMock &&
                     <MockView
                         mock={selectedMock}
+                        selectedRouteId={selectedRouteId}
                         runningPort={mocks.running[selectedMock.id]}
                         log={mocks.logsByMock[selectedMock.id] ?? []}
                         onSave={mocks.save}
