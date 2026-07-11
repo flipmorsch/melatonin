@@ -1,4 +1,4 @@
-import {ReactNode, useEffect, useState} from 'react';
+import {ReactNode, useEffect, useRef, useState} from 'react';
 import {
     Accordion, ActionIcon, Autocomplete, Badge, Button, Checkbox, Group,
     NativeSelect, NumberInput, PasswordInput, Stack, TextInput,
@@ -19,6 +19,7 @@ interface Props {
     folders: string[];
     /** Active environment's variable names, for {{var}} autocomplete. */
     variables: string[];
+    /** Persists a request. Called by the debounced auto-save; there is no Save button. */
     onSave: (colId: string, req: main.SavedRequest) => Promise<unknown>;
     /** Called after every send (success or failure) so the history list refreshes. */
     onSent: () => void;
@@ -45,9 +46,26 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
     const [error, setError] = useState('');
     const [sending, setSending] = useState(false);
 
+    /** Debounced auto-save not yet written to disk. */
+    const pending = useRef<{timer: number, colId: string, req: main.SavedRequest} | null>(null);
+    /** Set by loadFields so the field-change effect skips the load itself. */
+    const justLoaded = useRef(false);
+
+    /** Writes any pending edit immediately — before switching requests or unmounting,
+     * so mid-debounce keystrokes are never lost. */
+    function flushPending() {
+        if (!pending.current) return;
+        clearTimeout(pending.current.timer);
+        const {colId, req} = pending.current;
+        pending.current = null;
+        // switching away — this view's error strip is gone, so failures go to the console
+        onSave(colId, req).catch(console.error);
+    }
+
     /** Fills the editor from a saved request or a history entry's request.
      * Non-empty sections start expanded, empty ones collapsed. */
     function loadFields(r: main.SavedRequest | main.RequestInput) {
+        justLoaded.current = true;
         setMethod(r.method);
         setUrl(r.url);
         setParams(rowsFromKV(r.params));
@@ -70,6 +88,7 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
     }
 
     useEffect(() => {
+        flushPending();
         if (!selected) return;
         setName(selected.req.name);
         setFolder(selected.req.folder ?? '');
@@ -77,6 +96,9 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
         setResponse(null);
         setError('');
     }, [selected?.req.id]);
+
+    // flush on unmount (e.g. switching to the environments or mock view)
+    useEffect(() => flushPending, []);
 
     useEffect(() => {
         if (!replay) return;
@@ -99,25 +121,34 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
     const optionsCount =
         (Number(timeoutSec) > 0 ? 1 : 0) + (noRedirects ? 1 : 0) + (skipTls ? 1 : 0);
 
-    async function save() {
+    // debounced auto-save: any edit to a saved request persists after 600ms of quiet
+    useEffect(() => {
         if (!selected) return;
-        try {
-            await onSave(selected.colId, main.SavedRequest.createFrom({
-                id: selected.req.id,
-                name,
-                folder: folder.trim(),
-                method,
-                url,
-                params: rowsToKV(params),
-                headers: rowsToKV(headers),
-                body,
-                auth: auth(),
-                options: options(),
-            }));
-        } catch (e) {
-            setError(String(e));
+        if (justLoaded.current) {
+            justLoaded.current = false;
+            return;
         }
-    }
+        if (pending.current) clearTimeout(pending.current.timer);
+        const colId = selected.colId;
+        const req = main.SavedRequest.createFrom({
+            id: selected.req.id,
+            name,
+            folder: folder.trim(),
+            method,
+            url,
+            params: rowsToKV(params),
+            headers: rowsToKV(headers),
+            body,
+            auth: auth(),
+            options: options(),
+        });
+        const timer = window.setTimeout(() => {
+            pending.current = null;
+            onSave(colId, req).catch(e => setError(String(e)));
+        }, 600);
+        pending.current = {timer, colId, req};
+    }, [name, folder, method, url, params, headers, body,
+        authType, authToken, authUser, authPass, timeoutSec, noRedirects, skipTls]);
 
     async function send() {
         setSending(true);
@@ -195,7 +226,6 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
                     placeholder="Folder (optional)"
                     disabled={!selected}
                 />
-                <Button onClick={save} disabled={!selected}>Save</Button>
             </Group>
 
             <form onSubmit={e => { e.preventDefault(); send(); }}>

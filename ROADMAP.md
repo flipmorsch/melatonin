@@ -14,6 +14,9 @@ real use decides what gets built.
 - Send Options: per-request timeout override, don't-follow-redirects, skip-TLS-verify —
   v1-spec'd but found missing when cross-checking roadmap vs code (done 2026-07-11)
 - Silent in-memory cookie jar, so session/cookie-auth APIs work (done 2026-07-11)
+- Auto-save: edits to a saved request persist automatically (debounced, flushed on
+  switch/unmount); Save button removed. Fixes silent edit loss when clicking another
+  request in the sidebar (done 2026-07-11)
 - Friction captured in FRICTION.md as it happens; triaged here after ~a week of use
 - Done when: launched from the OS launcher daily for a week, friction log triaged
 
