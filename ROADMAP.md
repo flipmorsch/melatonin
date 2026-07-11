@@ -2,6 +2,16 @@
 
 **Status: v1 scope complete (2026-07-11).** Everything under "Future" remains deferred.
 
+## v1.1 — Daily-drive (current)
+
+Goal: melatonin replaces Insomnia as the daily driver. No new features up front —
+real use decides what gets built.
+
+- Install: `make install` → binary in `~/.local/bin`, launcher entry (done 2026-07-11)
+- Import from Insomnia/Postman: **skipped** — few enough requests to retype by hand (YAGNI)
+- Friction captured in FRICTION.md as it happens; triaged here after ~a week of use
+- Done when: launched from the OS launcher daily for a week, friction log triaged
+
 ## v1 — Foundation
 
 - Name: **melatonin** (binary `melatonin`, data dir `~/.config/melatonin/`)
