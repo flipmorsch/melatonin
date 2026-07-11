@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"regexp"
 	"strings"
@@ -14,16 +16,17 @@ import (
 )
 
 const (
-	requestTimeout  = 30 * time.Second // ROADMAP: per-request override comes with the saved-Request model
+	requestTimeout  = 30 * time.Second // default; per-request override via SendOptions
 	maxResponseSize = 20 << 20         // ponytail: 20 MB hard cap so a huge download can't OOM the webview
 )
 
 // App struct
 type App struct {
-	ctx     context.Context
-	client  *http.Client
-	dataDir string
-	mu      sync.Mutex // guards all storage file access
+	ctx      context.Context
+	jar      http.CookieJar    // silent in-memory cookie jar (ROADMAP: managing/viewing it is future work)
+	insecure http.RoundTripper // shared transport for skip-TLS-verify sends, so connections still pool
+	dataDir  string
+	mu       sync.Mutex // guards all storage file access
 
 	mockMu    sync.Mutex // guards mocks; never held together with mu
 	mocks     map[string]*runningMock
@@ -32,10 +35,14 @@ type App struct {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
+	jar, _ := cookiejar.New(nil) // only errors on a bad PublicSuffixList; nil is valid
+	insecure := http.DefaultTransport.(*http.Transport).Clone()
+	insecure.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // per-request opt-in only
 	return &App{
-		client:  &http.Client{Timeout: requestTimeout},
-		dataDir: defaultDataDir(),
-		mocks:   map[string]*runningMock{},
+		jar:      jar,
+		insecure: insecure,
+		dataDir:  defaultDataDir(),
+		mocks:    map[string]*runningMock{},
 	}
 }
 
@@ -57,13 +64,22 @@ type Auth struct {
 	Password string `json:"password"`
 }
 
+// SendOptions are per-request overrides of the send defaults. The zero
+// value means: 30s timeout, follow redirects, verify TLS.
+type SendOptions struct {
+	TimeoutSec        int  `json:"timeoutSec"` // 0 = default
+	NoFollowRedirects bool `json:"noFollowRedirects"`
+	SkipTLSVerify     bool `json:"skipTlsVerify"`
+}
+
 type RequestInput struct {
-	Method  string `json:"method"`
-	URL     string `json:"url"`
-	Params  KVList `json:"params"`
-	Headers KVList `json:"headers"`
-	Body    string `json:"body"`
-	Auth    Auth   `json:"auth"`
+	Method  string      `json:"method"`
+	URL     string      `json:"url"`
+	Params  KVList      `json:"params"`
+	Headers KVList      `json:"headers"`
+	Body    string      `json:"body"`
+	Auth    Auth        `json:"auth"`
+	Options SendOptions `json:"options"`
 }
 
 type ResponseData struct {
@@ -150,8 +166,21 @@ func (a *App) send(in RequestInput) (*ResponseData, error) {
 		req.SetBasicAuth(substitute(in.Auth.Username, vars), substitute(in.Auth.Password, vars))
 	}
 
+	client := &http.Client{Timeout: requestTimeout, Jar: a.jar}
+	if in.Options.TimeoutSec > 0 {
+		client.Timeout = time.Duration(in.Options.TimeoutSec) * time.Second
+	}
+	if in.Options.NoFollowRedirects {
+		client.CheckRedirect = func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+	}
+	if in.Options.SkipTLSVerify {
+		client.Transport = a.insecure
+	}
+
 	start := time.Now()
-	resp, err := a.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}

@@ -46,15 +46,16 @@ func (l *KVList) UnmarshalJSON(data []byte) error {
 }
 
 type SavedRequest struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Folder  string `json:"folder"` // single-level grouping inside the collection; "" = root
-	Method  string `json:"method"`
-	URL     string `json:"url"`
-	Params  KVList `json:"params"`
-	Headers KVList `json:"headers"`
-	Body    string `json:"body"`
-	Auth    Auth   `json:"auth"`
+	ID      string      `json:"id"`
+	Name    string      `json:"name"`
+	Folder  string      `json:"folder"` // single-level grouping inside the collection; "" = root
+	Method  string      `json:"method"`
+	URL     string      `json:"url"`
+	Params  KVList      `json:"params"`
+	Headers KVList      `json:"headers"`
+	Body    string      `json:"body"`
+	Auth    Auth        `json:"auth"`
+	Options SendOptions `json:"options"` // zero value in pre-v1.1 collection files = all defaults
 }
 
 type Collection struct {

@@ -25,6 +25,9 @@ A named folder tree of Requests, shown in the sidebar.
 ### Folder
 An optional single-level grouping of Requests inside a Collection. Folders are derived from the Requests that name them — an empty Folder ceases to exist.
 
+### Send Options
+Per-Request overrides of how a send behaves: how long to wait, whether redirects are followed, whether TLS certificates are verified. Unset options mean the defaults apply.
+
 ### Environment
 A named set of variables (e.g. dev/staging/prod). Environments are global (not scoped to a Collection); exactly one is active at a time. Requests reference variables as `{{name}}`; the active Environment supplies the values at send time.
 

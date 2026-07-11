@@ -1,7 +1,7 @@
 import {ReactNode, useEffect, useState} from 'react';
 import {
-    Accordion, ActionIcon, Autocomplete, Badge, Button, Group, NativeSelect,
-    PasswordInput, Stack, TextInput,
+    Accordion, ActionIcon, Autocomplete, Badge, Button, Checkbox, Group,
+    NativeSelect, NumberInput, PasswordInput, Stack, TextInput,
 } from '@mantine/core';
 import {SendRequest} from '../../../wailsjs/go/main/App';
 import {main} from '../../../wailsjs/go/models';
@@ -36,17 +36,18 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
     const [authToken, setAuthToken] = useState('');
     const [authUser, setAuthUser] = useState('');
     const [authPass, setAuthPass] = useState('');
+    const [timeoutSec, setTimeoutSec] = useState<number | string>(0);
+    const [noRedirects, setNoRedirects] = useState(false);
+    const [skipTls, setSkipTls] = useState(false);
     const [open, setOpen] = useState<string[]>([]);
 
     const [response, setResponse] = useState<main.ResponseData | null>(null);
     const [error, setError] = useState('');
     const [sending, setSending] = useState(false);
 
-    useEffect(() => {
-        if (!selected) return;
-        const r = selected.req;
-        setName(r.name);
-        setFolder(r.folder ?? '');
+    /** Fills the editor from a saved request or a history entry's request.
+     * Non-empty sections start expanded, empty ones collapsed. */
+    function loadFields(r: main.SavedRequest | main.RequestInput) {
         setMethod(r.method);
         setUrl(r.url);
         setParams(rowsFromKV(r.params));
@@ -56,41 +57,47 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
         setAuthToken(r.auth?.token ?? '');
         setAuthUser(r.auth?.username ?? '');
         setAuthPass(r.auth?.password ?? '');
-        // non-empty sections start expanded, empty ones collapsed
+        setTimeoutSec(r.options?.timeoutSec || 0);
+        setNoRedirects(r.options?.noFollowRedirects ?? false);
+        setSkipTls(r.options?.skipTlsVerify ?? false);
         setOpen([
             ...(r.params?.length ? ['params'] : []),
             ...(r.headers?.length || r.auth?.type ? ['headers'] : []),
             ...(r.body ? ['body'] : []),
+            ...(r.options?.timeoutSec || r.options?.noFollowRedirects || r.options?.skipTlsVerify
+                ? ['options'] : []),
         ]);
+    }
+
+    useEffect(() => {
+        if (!selected) return;
+        setName(selected.req.name);
+        setFolder(selected.req.folder ?? '');
+        loadFields(selected.req);
         setResponse(null);
         setError('');
     }, [selected?.req.id]);
 
     useEffect(() => {
         if (!replay) return;
-        const r = replay.request;
         setName('');
         setFolder('');
-        setMethod(r.method);
-        setUrl(r.url);
-        setParams(rowsFromKV(r.params));
-        setHeaders(rowsFromKV(r.headers));
-        setBody(r.body);
-        setAuthType(r.auth?.type ?? '');
-        setAuthToken(r.auth?.token ?? '');
-        setAuthUser(r.auth?.username ?? '');
-        setAuthPass(r.auth?.password ?? '');
-        setOpen([
-            ...(r.params?.length ? ['params'] : []),
-            ...(r.headers?.length || r.auth?.type ? ['headers'] : []),
-            ...(r.body ? ['body'] : []),
-        ]);
+        loadFields(replay.request);
         setResponse(replay.response ?? null);
         setError(replay.error ?? '');
     }, [replay?.id]);
 
     const auth = (): main.Auth =>
         ({type: authType, token: authToken, username: authUser, password: authPass});
+
+    const options = (): main.SendOptions => ({
+        timeoutSec: Number(timeoutSec) || 0,
+        noFollowRedirects: noRedirects,
+        skipTlsVerify: skipTls,
+    });
+
+    const optionsCount =
+        (Number(timeoutSec) > 0 ? 1 : 0) + (noRedirects ? 1 : 0) + (skipTls ? 1 : 0);
 
     async function save() {
         if (!selected) return;
@@ -105,6 +112,7 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
                 headers: rowsToKV(headers),
                 body,
                 auth: auth(),
+                options: options(),
             }));
         } catch (e) {
             setError(String(e));
@@ -123,6 +131,7 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
                 headers: rowsToKV(headers),
                 body,
                 auth: auth(),
+                options: options(),
             })));
         } catch (e) {
             setError(String(e));
@@ -292,6 +301,35 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
                             />
                         </Accordion.Panel>
                     </Accordion.Item>}
+
+                <Accordion.Item value="options">
+                    {sectionControl('Options', optionsCount)}
+                    <Accordion.Panel>
+                        <Group gap="lg" align="center">
+                            <NumberInput
+                                w={150} size="xs" className="mono-input"
+                                min={0} max={600} allowDecimal={false}
+                                value={timeoutSec || ''}
+                                onChange={setTimeoutSec}
+                                placeholder="30"
+                                label="Timeout (s)"
+                                styles={{root: {display: 'flex', alignItems: 'center', gap: 8}}}
+                            />
+                            <Checkbox
+                                size="xs"
+                                label="Don't follow redirects"
+                                checked={noRedirects}
+                                onChange={e => setNoRedirects(e.currentTarget.checked)}
+                            />
+                            <Checkbox
+                                size="xs"
+                                label="Skip TLS verify"
+                                checked={skipTls}
+                                onChange={e => setSkipTls(e.currentTarget.checked)}
+                            />
+                        </Group>
+                    </Accordion.Panel>
+                </Accordion.Item>
             </Accordion>
 
             <ResponseViewer response={response} error={error}/>

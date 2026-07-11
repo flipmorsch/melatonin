@@ -18,6 +18,22 @@ export namespace main {
 	        this.password = source["password"];
 	    }
 	}
+	export class SendOptions {
+	    timeoutSec: number;
+	    noFollowRedirects: boolean;
+	    skipTlsVerify: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SendOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.timeoutSec = source["timeoutSec"];
+	        this.noFollowRedirects = source["noFollowRedirects"];
+	        this.skipTlsVerify = source["skipTlsVerify"];
+	    }
+	}
 	export class KV {
 	    key: string;
 	    value: string;
@@ -42,6 +58,7 @@ export namespace main {
 	    headers: KV[];
 	    body: string;
 	    auth: Auth;
+	    options: SendOptions;
 	
 	    static createFrom(source: any = {}) {
 	        return new SavedRequest(source);
@@ -58,6 +75,7 @@ export namespace main {
 	        this.headers = this.convertValues(source["headers"], KV);
 	        this.body = source["body"];
 	        this.auth = this.convertValues(source["auth"], Auth);
+	        this.options = this.convertValues(source["options"], SendOptions);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -191,6 +209,7 @@ export namespace main {
 	    headers: KV[];
 	    body: string;
 	    auth: Auth;
+	    options: SendOptions;
 	
 	    static createFrom(source: any = {}) {
 	        return new RequestInput(source);
@@ -204,6 +223,7 @@ export namespace main {
 	        this.headers = this.convertValues(source["headers"], KV);
 	        this.body = source["body"];
 	        this.auth = this.convertValues(source["auth"], Auth);
+	        this.options = this.convertValues(source["options"], SendOptions);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -345,6 +365,7 @@ export namespace main {
 		    return a;
 		}
 	}
+	
 	
 	
 

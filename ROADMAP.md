@@ -11,6 +11,9 @@ real use decides what gets built.
 - Import from Insomnia/Postman: **skipped** — few enough requests to retype by hand (YAGNI)
 - Request history: every send recorded (as typed, failures included), sidebar History
   section, click to reload into the scratch editor (done 2026-07-11)
+- Send Options: per-request timeout override, don't-follow-redirects, skip-TLS-verify —
+  v1-spec'd but found missing when cross-checking roadmap vs code (done 2026-07-11)
+- Silent in-memory cookie jar, so session/cookie-auth APIs work (done 2026-07-11)
 - Friction captured in FRICTION.md as it happens; triaged here after ~a week of use
 - Done when: launched from the OS launcher daily for a week, friction log triaged
 
@@ -31,7 +34,7 @@ real use decides what gets built.
 - Auth helpers: Bearer token, Basic auth
 - UI: three-pane layout (sidebar | request editor | response viewer), no tabs — sidebar is the navigation
 - Environments are global; one active at a time, switched in the top bar
-- Send defaults: 30s timeout (per-request override), follow redirects (per-request toggle off), TLS verify on (per-request skip toggle), pretty-print responses up to ~5 MB then raw + save-to-file, respect `HTTP_PROXY`/`HTTPS_PROXY`
+- Send defaults: 30s timeout (per-request override), follow redirects (per-request toggle off), TLS verify on (per-request skip toggle), pretty-print responses up to ~5 MB then raw, respect `HTTP_PROXY`/`HTTPS_PROXY` — the three per-request toggles shipped late, in v1.1
 
 ## v1 — Mock Server
 
@@ -46,7 +49,8 @@ real use decides what gets built.
 ## Future (explicitly deferred from v1)
 
 - Pre-request / post-response scripting
-- Cookie jar UI (client may keep a silent cookie jar; managing/viewing it is future work)
+- Cookie jar UI (the client keeps a silent in-memory jar since v1.1; managing/viewing it is future work)
+- Save response body to file (dropped from the v1 send-defaults line — copy-to-clipboard covers it until a >5 MB body shows up)
 - GraphQL, gRPC, WebSocket, SSE support
 - Code generation ("copy as curl", etc.)
 - Import from Postman / Insomnia
