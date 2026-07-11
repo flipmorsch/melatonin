@@ -18,14 +18,28 @@ export namespace main {
 	        this.password = source["password"];
 	    }
 	}
+	export class KV {
+	    key: string;
+	    value: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new KV(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.value = source["value"];
+	    }
+	}
 	export class SavedRequest {
 	    id: string;
 	    name: string;
 	    folder: string;
 	    method: string;
 	    url: string;
-	    params: Record<string, string>;
-	    headers: Record<string, string>;
+	    params: KV[];
+	    headers: KV[];
 	    body: string;
 	    auth: Auth;
 	
@@ -40,8 +54,8 @@ export namespace main {
 	        this.folder = source["folder"];
 	        this.method = source["method"];
 	        this.url = source["url"];
-	        this.params = source["params"];
-	        this.headers = source["headers"];
+	        this.params = this.convertValues(source["params"], KV);
+	        this.headers = this.convertValues(source["headers"], KV);
 	        this.body = source["body"];
 	        this.auth = this.convertValues(source["auth"], Auth);
 	    }
@@ -146,6 +160,7 @@ export namespace main {
 		    return a;
 		}
 	}
+	
 	export class MockLogEntry {
 	    time: string;
 	    method: string;
@@ -231,8 +246,8 @@ export namespace main {
 	export class RequestInput {
 	    method: string;
 	    url: string;
-	    params: Record<string, string>;
-	    headers: Record<string, string>;
+	    params: KV[];
+	    headers: KV[];
 	    body: string;
 	    auth: Auth;
 	
@@ -244,8 +259,8 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.method = source["method"];
 	        this.url = source["url"];
-	        this.params = source["params"];
-	        this.headers = source["headers"];
+	        this.params = this.convertValues(source["params"], KV);
+	        this.headers = this.convertValues(source["headers"], KV);
 	        this.body = source["body"];
 	        this.auth = this.convertValues(source["auth"], Auth);
 	    }

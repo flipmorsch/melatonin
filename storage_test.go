@@ -29,7 +29,7 @@ func TestCollectionCRUD(t *testing.T) {
 		Name:    "List users",
 		Method:  "GET",
 		URL:     "https://example.com/users",
-		Headers: map[string]string{"Accept": "application/json"},
+		Headers: KVList{{Key: "Accept", Value: "application/json"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -121,6 +121,37 @@ func TestSubstitute(t *testing.T) {
 	}
 	if got := substitute("{{baseUrl}}", nil); got != "{{baseUrl}}" {
 		t.Errorf("nil vars: got %q", got)
+	}
+}
+
+// Collection files written before ADR 0003 store params/headers as
+// {"k":"v"} objects; they must keep loading (keys sorted for determinism).
+func TestLegacyMapParamsAndHeadersStillLoad(t *testing.T) {
+	a := testApp(t)
+	legacy := `{"id":"c1","name":"old","requests":[{
+		"id":"r1","name":"list","method":"GET","url":"http://x",
+		"params":{"page":"2","filter":"on"},
+		"headers":{"Accept":"application/json"},
+		"body":"","auth":{"type":"","token":"","username":"","password":""}}]}`
+	dir := filepath.Join(a.dataDir, "collections")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "c1.json"), []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cols, err := a.ListCollections()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := cols[0].Requests[0]
+	want := KVList{{Key: "filter", Value: "on"}, {Key: "page", Value: "2"}}
+	if len(r.Params) != 2 || r.Params[0] != want[0] || r.Params[1] != want[1] {
+		t.Fatalf("params = %+v, want %+v", r.Params, want)
+	}
+	if len(r.Headers) != 1 || r.Headers[0] != (KV{Key: "Accept", Value: "application/json"}) {
+		t.Fatalf("headers = %+v", r.Headers)
 	}
 }
 

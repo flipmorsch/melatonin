@@ -58,12 +58,12 @@ type Auth struct {
 }
 
 type RequestInput struct {
-	Method  string            `json:"method"`
-	URL     string            `json:"url"`
-	Params  map[string]string `json:"params"`
-	Headers map[string]string `json:"headers"`
-	Body    string            `json:"body"`
-	Auth    Auth              `json:"auth"`
+	Method  string `json:"method"`
+	URL     string `json:"url"`
+	Params  KVList `json:"params"`
+	Headers KVList `json:"headers"`
+	Body    string `json:"body"`
+	Auth    Auth   `json:"auth"`
 }
 
 type ResponseData struct {
@@ -103,25 +103,37 @@ func (a *App) SendRequest(in RequestInput) (*ResponseData, error) {
 	if in.Body != "" {
 		body = strings.NewReader(substitute(in.Body, vars))
 	}
+	// The URL is sent as typed; param rows are appended after its query
+	// string in row order — no re-encode, no sorting, no override (ADR 0003).
 	finalURL := substitute(in.URL, vars)
-	if len(in.Params) > 0 {
-		u, err := url.Parse(finalURL)
-		if err != nil {
-			return nil, err
+	var query strings.Builder
+	for _, p := range in.Params {
+		if p.Key == "" {
+			continue
 		}
-		q := u.Query()
-		for k, v := range in.Params {
-			q.Set(substitute(k, vars), substitute(v, vars))
+		if query.Len() > 0 {
+			query.WriteByte('&')
 		}
-		u.RawQuery = q.Encode()
-		finalURL = u.String()
+		query.WriteString(url.QueryEscape(substitute(p.Key, vars)))
+		query.WriteByte('=')
+		query.WriteString(url.QueryEscape(substitute(p.Value, vars)))
+	}
+	if query.Len() > 0 {
+		sep := "?"
+		if strings.Contains(finalURL, "?") {
+			sep = "&"
+		}
+		finalURL += sep + query.String()
 	}
 	req, err := http.NewRequestWithContext(a.ctx, in.Method, finalURL, body)
 	if err != nil {
 		return nil, err
 	}
-	for k, v := range in.Headers {
-		req.Header.Set(substitute(k, vars), substitute(v, vars))
+	for _, h := range in.Headers {
+		if h.Key == "" {
+			continue
+		}
+		req.Header.Add(substitute(h.Key, vars), substitute(h.Value, vars))
 	}
 	// the auth helper wins over a manually typed Authorization header
 	switch in.Auth.Type {

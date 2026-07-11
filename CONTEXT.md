@@ -14,7 +14,10 @@ The Insomnia-like half of the tool: where a user composes an HTTP request (metho
 The other half: a locally-running HTTP server that answers requests with user-defined responses. Exists so APIs can be faked/tested without any cloud service.
 
 ### Request
-A saved, named HTTP request definition: method, URL, query params, headers, body, and auth. Lives inside a Collection.
+A saved, named HTTP request definition: method, URL, query params, headers, body, and auth. Query params and headers are ordered lists, and the same name may appear more than once (as HTTP allows). Lives inside a Collection.
+
+### Auth Helper
+A structured shortcut on a Request for common authentication schemes (bearer token, basic credentials). Not a header itself: at send time it produces the `Authorization` header, overriding any manually-typed one.
 
 ### Collection
 A named folder tree of Requests, shown in the sidebar.

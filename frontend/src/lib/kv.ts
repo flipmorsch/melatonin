@@ -4,7 +4,7 @@ export const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTION
 
 const PRETTY_PRINT_LIMIT = 5 * 1024 * 1024;
 
-/** Parses "key: value" lines into a record (used for headers, params, variables). */
+/** Parses "key: value" lines into a record (used for mock headers and env variables). */
 export function parseKV(text: string): Record<string, string> {
     const kv: Record<string, string> = {};
     for (const line of text.split('\n')) {

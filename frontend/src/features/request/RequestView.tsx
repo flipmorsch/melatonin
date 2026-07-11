@@ -1,8 +1,12 @@
-import {useEffect, useState} from 'react';
-import {Autocomplete, Button, Group, NativeSelect, PasswordInput, Stack, Textarea, TextInput} from '@mantine/core';
+import {ReactNode, useEffect, useState} from 'react';
+import {
+    Accordion, ActionIcon, Autocomplete, Badge, Button, Group, NativeSelect,
+    PasswordInput, Stack, Textarea, TextInput,
+} from '@mantine/core';
 import {SendRequest} from '../../../wailsjs/go/main/App';
 import {main} from '../../../wailsjs/go/models';
-import {kvToText, METHODS, parseKV} from '../../lib/kv';
+import {METHODS} from '../../lib/kv';
+import {KVEditor, KVRow, newKVRow, rowsFromKV, rowsToKV} from '../../components/KVEditor';
 import {ResponseViewer} from './ResponseViewer';
 
 interface Props {
@@ -18,13 +22,14 @@ export function RequestView({selected, folders, onSave}: Props) {
     const [folder, setFolder] = useState('');
     const [method, setMethod] = useState('GET');
     const [url, setUrl] = useState('');
-    const [paramsText, setParamsText] = useState('');
-    const [headersText, setHeadersText] = useState('');
+    const [params, setParams] = useState<KVRow[]>([]);
+    const [headers, setHeaders] = useState<KVRow[]>([]);
     const [body, setBody] = useState('');
     const [authType, setAuthType] = useState('');
     const [authToken, setAuthToken] = useState('');
     const [authUser, setAuthUser] = useState('');
     const [authPass, setAuthPass] = useState('');
+    const [open, setOpen] = useState<string[]>([]);
 
     const [response, setResponse] = useState<main.ResponseData | null>(null);
     const [error, setError] = useState('');
@@ -37,13 +42,19 @@ export function RequestView({selected, folders, onSave}: Props) {
         setFolder(r.folder ?? '');
         setMethod(r.method);
         setUrl(r.url);
-        setParamsText(kvToText(r.params));
-        setHeadersText(kvToText(r.headers));
+        setParams(rowsFromKV(r.params));
+        setHeaders(rowsFromKV(r.headers));
         setBody(r.body);
         setAuthType(r.auth?.type ?? '');
         setAuthToken(r.auth?.token ?? '');
         setAuthUser(r.auth?.username ?? '');
         setAuthPass(r.auth?.password ?? '');
+        // non-empty sections start expanded, empty ones collapsed
+        setOpen([
+            ...(r.params?.length ? ['params'] : []),
+            ...(r.headers?.length || r.auth?.type ? ['headers'] : []),
+            ...(r.body ? ['body'] : []),
+        ]);
         setResponse(null);
         setError('');
     }, [selected?.req.id]);
@@ -60,8 +71,8 @@ export function RequestView({selected, folders, onSave}: Props) {
                 folder: folder.trim(),
                 method,
                 url,
-                params: parseKV(paramsText),
-                headers: parseKV(headersText),
+                params: rowsToKV(params),
+                headers: rowsToKV(headers),
                 body,
                 auth: auth(),
             }));
@@ -78,8 +89,8 @@ export function RequestView({selected, folders, onSave}: Props) {
             setResponse(await SendRequest(main.RequestInput.createFrom({
                 method,
                 url,
-                params: parseKV(paramsText),
-                headers: parseKV(headersText),
+                params: rowsToKV(params),
+                headers: rowsToKV(headers),
                 body,
                 auth: auth(),
             })));
@@ -90,7 +101,28 @@ export function RequestView({selected, folders, onSave}: Props) {
         }
     }
 
+    function addRow(section: 'params' | 'headers') {
+        setOpen(o => o.includes(section) ? o : [...o, section]);
+        (section === 'params' ? setParams : setHeaders)(rows => [...rows, newKVRow()]);
+    }
+
     const hasBody = !['GET', 'HEAD'].includes(method);
+
+    /** Accordion header with a count badge and an add-row action beside the control. */
+    const sectionControl = (label: string, count: number, onAdd?: () => void, extra?: ReactNode) => (
+        <Group gap={0} wrap="nowrap">
+            <Accordion.Control>
+                <Group gap="xs">
+                    {label}
+                    {count > 0 && <Badge size="xs" variant="light" color="gray">{count}</Badge>}
+                    {extra}
+                </Group>
+            </Accordion.Control>
+            {onAdd &&
+                <ActionIcon size="sm" variant="subtle" color="gray" mx="xs"
+                    title={`Add ${label.toLowerCase()} row`} onClick={onAdd}>+</ActionIcon>}
+        </Group>
+    );
 
     return (
         <Stack gap="sm" style={{flex: 1, minHeight: 0}}>
@@ -134,62 +166,82 @@ export function RequestView({selected, folders, onSave}: Props) {
                 </Group>
             </form>
 
-            <Group gap="xs" wrap="nowrap">
-                <NativeSelect
-                    w={140}
-                    size="xs"
-                    value={authType}
-                    onChange={e => setAuthType(e.target.value)}
-                    data={[
-                        {value: '', label: 'No auth'},
-                        {value: 'bearer', label: 'Bearer token'},
-                        {value: 'basic', label: 'Basic auth'},
-                    ]}
-                />
-                {authType === 'bearer' &&
-                    <TextInput
-                        style={{flex: 1}} size="xs" className="mono-input"
-                        value={authToken}
-                        onChange={e => setAuthToken(e.target.value)}
-                        placeholder="Token (or {{token}})"
-                    />}
-                {authType === 'basic' && <>
-                    <TextInput
-                        style={{flex: 1}} size="xs" className="mono-input"
-                        value={authUser}
-                        onChange={e => setAuthUser(e.target.value)}
-                        placeholder="Username"
-                    />
-                    <PasswordInput
-                        style={{flex: 1}} size="xs" className="mono-input"
-                        value={authPass}
-                        onChange={e => setAuthPass(e.target.value)}
-                        placeholder="Password"
-                    />
-                </>}
-            </Group>
+            <Accordion multiple value={open} onChange={setOpen} variant="separated"
+                styles={{label: {paddingTop: 8, paddingBottom: 8}}}>
+                <Accordion.Item value="params">
+                    {sectionControl('Query Params', rowsToKV(params).length, () => addRow('params'))}
+                    <Accordion.Panel>
+                        <KVEditor
+                            rows={params} onChange={setParams}
+                            keyPlaceholder="page" valuePlaceholder="2 or {{term}}"
+                        />
+                    </Accordion.Panel>
+                </Accordion.Item>
 
-            <Group gap="sm" align="stretch" wrap="nowrap">
-                <Textarea
-                    style={{flex: 1}} className="mono-input" rows={4}
-                    value={paramsText}
-                    onChange={e => setParamsText(e.target.value)}
-                    placeholder={'Query params, one per line:\npage: 2\nsearch: {{term}}'}
-                />
-                <Textarea
-                    style={{flex: 1}} className="mono-input" rows={4}
-                    value={headersText}
-                    onChange={e => setHeadersText(e.target.value)}
-                    placeholder={'Headers, one per line:\nX-Request-Id: abc'}
-                />
+                <Accordion.Item value="headers">
+                    {sectionControl('Headers', rowsToKV(headers).length, () => addRow('headers'),
+                        authType && <Badge size="xs" variant="light">auth</Badge>)}
+                    <Accordion.Panel>
+                        <Stack gap="xs">
+                            <Group gap="xs" wrap="nowrap">
+                                <NativeSelect
+                                    w={140}
+                                    size="xs"
+                                    value={authType}
+                                    onChange={e => setAuthType(e.target.value)}
+                                    data={[
+                                        {value: '', label: 'No auth'},
+                                        {value: 'bearer', label: 'Bearer token'},
+                                        {value: 'basic', label: 'Basic auth'},
+                                    ]}
+                                />
+                                {authType === 'bearer' &&
+                                    <TextInput
+                                        style={{flex: 1}} size="xs" className="mono-input"
+                                        value={authToken}
+                                        onChange={e => setAuthToken(e.target.value)}
+                                        placeholder="Token (or {{token}})"
+                                    />}
+                                {authType === 'basic' && <>
+                                    <TextInput
+                                        style={{flex: 1}} size="xs" className="mono-input"
+                                        value={authUser}
+                                        onChange={e => setAuthUser(e.target.value)}
+                                        placeholder="Username"
+                                    />
+                                    <PasswordInput
+                                        style={{flex: 1}} size="xs" className="mono-input"
+                                        value={authPass}
+                                        onChange={e => setAuthPass(e.target.value)}
+                                        placeholder="Password"
+                                    />
+                                </>}
+                            </Group>
+                            <KVEditor
+                                rows={headers} onChange={setHeaders}
+                                keyPlaceholder="X-Request-Id" valuePlaceholder="abc"
+                                deadTitle={row =>
+                                    authType && row.key.trim().toLowerCase() === 'authorization'
+                                        ? 'Overridden by the auth helper' : undefined}
+                            />
+                        </Stack>
+                    </Accordion.Panel>
+                </Accordion.Item>
+
                 {hasBody &&
-                    <Textarea
-                        style={{flex: 1}} className="mono-input" rows={4}
-                        value={body}
-                        onChange={e => setBody(e.target.value)}
-                        placeholder="Request body"
-                    />}
-            </Group>
+                    <Accordion.Item value="body">
+                        {sectionControl('Body', 0, undefined,
+                            body && <Badge size="xs" variant="light" color="gray">{body.length} chars</Badge>)}
+                        <Accordion.Panel>
+                            <Textarea
+                                className="mono-input" autosize minRows={4} maxRows={14}
+                                value={body}
+                                onChange={e => setBody(e.target.value)}
+                                placeholder="Request body"
+                            />
+                        </Accordion.Panel>
+                    </Accordion.Item>}
+            </Accordion>
 
             <ResponseViewer response={response} error={error}/>
         </Stack>

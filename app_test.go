@@ -33,7 +33,7 @@ func TestSendRequestSubstitutesActiveEnvironment(t *testing.T) {
 	res, err := app.SendRequest(RequestInput{
 		Method:  "GET",
 		URL:     "{{baseUrl}}/users",
-		Headers: map[string]string{"Authorization": "Bearer {{token}}"},
+		Headers: KVList{{Key: "Authorization", Value: "Bearer {{token}}"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +47,8 @@ func TestSendRequestParamsAndAuth(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/bearer":
-			if r.URL.Query().Get("page") != "2" || r.URL.Query().Get("q") != "existing" {
+			// rows append after the URL's own query, in row order, duplicates kept
+			if r.URL.RawQuery != "q=existing&page=2&tag=a&tag=b" {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -72,7 +73,7 @@ func TestSendRequestParamsAndAuth(t *testing.T) {
 	res, err := app.SendRequest(RequestInput{
 		Method: "GET",
 		URL:    srv.URL + "/bearer?q=existing",
-		Params: map[string]string{"page": "2"},
+		Params: KVList{{Key: "page", Value: "2"}, {Key: "tag", Value: "a"}, {Key: "tag", Value: "b"}},
 		Auth:   Auth{Type: "bearer", Token: "sekret"},
 	})
 	if err != nil {
@@ -113,7 +114,7 @@ func TestSendRequest(t *testing.T) {
 	res, err := app.SendRequest(RequestInput{
 		Method:  "POST",
 		URL:     srv.URL,
-		Headers: map[string]string{"X-Check": "yes"},
+		Headers: KVList{{Key: "X-Check", Value: "yes"}},
 		Body:    `{"in":1}`,
 	})
 	if err != nil {

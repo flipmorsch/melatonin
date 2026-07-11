@@ -41,7 +41,7 @@ function App() {
     async function addRequest(colId: string) {
         const req = await cols.saveRequest(colId, main.SavedRequest.createFrom({
             id: '', name: 'New Request', folder: '', method: 'GET', url: '',
-            params: {}, headers: {}, body: '',
+            params: [], headers: [], body: '',
             auth: {type: '', token: '', username: '', password: ''},
         }));
         selectRequest(colId, req);

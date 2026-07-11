@@ -12,16 +12,49 @@ import (
 	"strings"
 )
 
+// KV is one query param or header row. Order and duplicate keys are
+// preserved (ADR 0003).
+type KV struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// KVList unmarshals from either the current [{key,value}] array or the
+// pre-ADR-0003 {"k":"v"} map shape found in older collection files.
+type KVList []KV
+
+func (l *KVList) UnmarshalJSON(data []byte) error {
+	var arr []KV
+	if err := json.Unmarshal(data, &arr); err == nil {
+		*l = arr
+		return nil
+	}
+	var m map[string]string
+	if err := json.Unmarshal(data, &m); err != nil {
+		return fmt.Errorf("expected [{key,value}] array or legacy object: %w", err)
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	*l = make(KVList, 0, len(m))
+	for _, k := range keys {
+		*l = append(*l, KV{Key: k, Value: m[k]})
+	}
+	return nil
+}
+
 type SavedRequest struct {
-	ID      string            `json:"id"`
-	Name    string            `json:"name"`
-	Folder  string            `json:"folder"` // single-level grouping inside the collection; "" = root
-	Method  string            `json:"method"`
-	URL     string            `json:"url"`
-	Params  map[string]string `json:"params"`
-	Headers map[string]string `json:"headers"`
-	Body    string            `json:"body"`
-	Auth    Auth              `json:"auth"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Folder  string `json:"folder"` // single-level grouping inside the collection; "" = root
+	Method  string `json:"method"`
+	URL     string `json:"url"`
+	Params  KVList `json:"params"`
+	Headers KVList `json:"headers"`
+	Body    string `json:"body"`
+	Auth    Auth   `json:"auth"`
 }
 
 type Collection struct {
