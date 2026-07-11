@@ -1,0 +1,54 @@
+# Roadmap — melatonin
+
+**Status: v1 scope complete (2026-07-11).** Everything under "Future" remains deferred.
+
+## v1 — Foundation
+
+- Name: **melatonin** (binary `melatonin`, data dir `~/.config/melatonin/`)
+
+- Stack: Wails (Go backend) + React/TypeScript frontend, Linux-first, personal tool
+- Storage: plain JSON files in a single data directory (one file per Collection, one for Environments, one per Mock Server)
+- Secrets: stored in plaintext (personal machine); data dir created with `0700` permissions. If the data dir is ever git-inited, environments must be gitignored.
+
+## v1 — Request Client
+
+- Compose: method, URL, query params, headers, body (raw text / JSON / form-urlencoded)
+- Send request; inspect response: status, headers, body (pretty-printed JSON), size, timing
+- Collections: save requests into folders, sidebar tree
+- Environments: `{{variable}}` substitution with per-environment values (dev/staging/prod)
+- Auth helpers: Bearer token, Basic auth
+- UI: three-pane layout (sidebar | request editor | response viewer), no tabs — sidebar is the navigation
+- Environments are global; one active at a time, switched in the top bar
+- Send defaults: 30s timeout (per-request override), follow redirects (per-request toggle off), TLS verify on (per-request skip toggle), pretty-print responses up to ~5 MB then raw + save-to-file, respect `HTTP_PROXY`/`HTTPS_PROXY`
+
+## v1 — Mock Server
+
+- Mock Server = name + port + list of routes (method + path → response)
+- Routes return static responses: status code, headers, body
+- Start/stop from the UI; multiple mock servers may run simultaneously on different ports
+- Request log: incoming requests shown in UI (method, path, headers, body)
+- Unmatched requests get a 404 with a "no route matched" body
+- Path matching is exact (plus possibly a trailing wildcard)
+- Binds to `127.0.0.1` by default; per-server "expose on network" toggle switches to `0.0.0.0`
+
+## Future (explicitly deferred from v1)
+
+- Pre-request / post-response scripting
+- Cookie jar UI (client may keep a silent cookie jar; managing/viewing it is future work)
+- GraphQL, gRPC, WebSocket, SSE support
+- Code generation ("copy as curl", etc.)
+- Request history log
+- Import from Postman / Insomnia
+
+- OS-keyring storage for variables marked "secret"
+- Syntax highlighting in the response viewer (design system exists; needs a highlighter)
+- Light theme: **not planned** — dark-only is the brand (see DESIGN.md)
+
+### Mock Server (deferred)
+
+- Dynamic/templated responses (echoing request data)
+- Conditional responses (match on headers/body, not just method+path)
+- Latency / error simulation
+- Path parameters (`/users/:id`)
+- Record & replay / proxy mode
+- OpenAPI import to auto-generate routes

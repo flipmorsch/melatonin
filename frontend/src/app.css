@@ -1,0 +1,135 @@
+/* Brand signatures Mantine can't express — everything else comes from theme.ts.
+   See DESIGN.md. */
+
+@font-face {
+    font-family: "Nunito";
+    font-style: normal;
+    font-weight: 400 700; /* variable font */
+    src: url("assets/fonts/nunito-var-latin.woff2") format("woff2");
+}
+
+:root {
+    /* method hues — these mean the HTTP method and nothing else */
+    --m-get: #5bd6a2;
+    --m-post: #64aef2;
+    --m-put: #eec468;
+    --m-patch: #f0995f;
+    --m-delete: #f0717e;
+    --m-neutral: #a09dbb;
+
+    --ok: #5bd6a2;
+
+    /* signature: the dusk horizon */
+    --horizon: linear-gradient(90deg,
+        #1b1740 0%, #4230a8 30%, #8266f0 55%, #b06e9a 80%, #d99a68 100%);
+}
+
+::selection { background: rgba(130, 102, 240, 0.25); }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+    background: var(--mantine-color-dark-5);
+    border-radius: 5px;
+    border: 2px solid var(--mantine-color-dark-7);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--mantine-color-dark-4); }
+
+/* ---------- dusk horizon under the top bar ---------- */
+
+.topbar { border-bottom: none !important; }
+
+.topbar::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: var(--horizon);
+}
+
+/* crescent moon: a disc eclipsed by the night */
+.moon {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    box-shadow: inset 3.5px -1.5px 0 0 var(--mantine-color-violet-2);
+}
+
+/* ---------- method badge ---------- */
+
+.method {
+    font-family: var(--mantine-font-family-monospace);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    color: var(--m-neutral);
+    background: color-mix(in srgb, var(--m-neutral) 12%, transparent);
+}
+
+.method.get    { color: var(--m-get);    background: color-mix(in srgb, var(--m-get) 12%, transparent); }
+.method.post   { color: var(--m-post);   background: color-mix(in srgb, var(--m-post) 12%, transparent); }
+.method.put    { color: var(--m-put);    background: color-mix(in srgb, var(--m-put) 12%, transparent); }
+.method.patch  { color: var(--m-patch);  background: color-mix(in srgb, var(--m-patch) 12%, transparent); }
+.method.delete { color: var(--m-delete); background: color-mix(in srgb, var(--m-delete) 12%, transparent); }
+
+/* ---------- run-state dot (night light) ---------- */
+
+.dot {
+    color: var(--mantine-color-dark-3);
+    font-size: 9px;
+    flex-shrink: 0;
+    transition: color 130ms ease;
+}
+
+.dot.on {
+    color: var(--ok);
+    text-shadow: 0 0 6px var(--ok);
+    animation: night-light 2.4s ease-in-out infinite;
+}
+
+@keyframes night-light {
+    0%, 100% { text-shadow: 0 0 4px var(--ok); }
+    50%      { text-shadow: 0 0 10px var(--ok); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dot.on { animation: none; }
+}
+
+/* ---------- shared micro-patterns ---------- */
+
+/* placeholders must hit 4.5:1 like body text — Mantine's default is too dim */
+input::placeholder, textarea::placeholder {
+    color: var(--mantine-color-dark-2) !important;
+}
+
+/* delete buttons on list rows reveal on hover */
+.row-reveal { visibility: hidden; }
+.hover-row:hover .row-reveal { visibility: visible; }
+
+/* sidebar / list rows */
+.side-row {
+    transition: background 130ms ease;
+}
+
+.side-row:hover { background: var(--mantine-color-dark-5); }
+
+/* request log rows: hover shows the row is expandable */
+.log-summary {
+    border-radius: var(--mantine-radius-sm);
+    transition: background 130ms ease;
+}
+
+.log-summary:hover { background: var(--mantine-color-dark-6); }
+
+/* monospace input contents */
+.mono-input input, .mono-input textarea, textarea.mono-input {
+    font-family: var(--mantine-font-family-monospace);
+    font-size: var(--mantine-font-size-sm);
+}
