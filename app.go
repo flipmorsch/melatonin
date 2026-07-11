@@ -97,7 +97,14 @@ func substitute(s string, vars map[string]string) string {
 // SendRequest performs an HTTP request and returns the response.
 // {{variable}} references are resolved against the active environment.
 // An error return rejects the JS promise, which the UI shows as the failure message.
+// Every send — including failures — is recorded to history.
 func (a *App) SendRequest(in RequestInput) (*ResponseData, error) {
+	resp, err := a.send(in)
+	a.recordHistory(in, resp, err)
+	return resp, err
+}
+
+func (a *App) send(in RequestInput) (*ResponseData, error) {
 	vars := a.activeVariables()
 	var body io.Reader
 	if in.Body != "" {

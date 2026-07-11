@@ -8,6 +8,7 @@ import {EnvironmentsView} from './features/environments/EnvironmentsView';
 import {MockView} from './features/mocks/MockView';
 import {useCollections} from './hooks/useCollections';
 import {useEnvironments} from './hooks/useEnvironments';
+import {useHistory} from './hooks/useHistory';
 import {useMocks} from './hooks/useMocks';
 
 type View = 'request' | 'environments' | 'mock';
@@ -16,9 +17,11 @@ function App() {
     const cols = useCollections();
     const envs = useEnvironments();
     const mocks = useMocks();
+    const hist = useHistory();
 
     const [view, setView] = useState<View>('request');
     const [selected, setSelected] = useState<{colId: string, req: main.SavedRequest} | null>(null);
+    const [replay, setReplay] = useState<main.HistoryEntry | null>(null);
     const [selectedMockId, setSelectedMockId] = useState('');
     const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
     const [shellError, setShellError] = useState('');
@@ -38,6 +41,14 @@ function App() {
 
     function selectRequest(colId: string, req: main.SavedRequest) {
         setSelected({colId, req});
+        setReplay(null);
+        setView('request');
+    }
+
+    /** Loads a history entry into the scratch editor with its recorded response. */
+    function selectHistory(e: main.HistoryEntry) {
+        setSelected(null);
+        setReplay(e);
         setView('request');
     }
 
@@ -146,6 +157,13 @@ function App() {
                     onSelectRoute={selectRoute}
                     onAddRoute={m => run(addRoute(m))}
                     onDeleteRoute={deleteRoute}
+                    history={hist.entries}
+                    selectedHistoryId={view === 'request' && !selected ? replay?.id ?? null : null}
+                    onSelectHistory={selectHistory}
+                    onClearHistory={() => {
+                        setReplay(null);
+                        run(hist.clear());
+                    }}
                 />
             </AppShell.Navbar>
 
@@ -153,8 +171,9 @@ function App() {
                 {shellError &&
                     <Text size="sm" ff="monospace" c="red.4" mb="xs">{shellError}</Text>}
                 {view === 'request' &&
-                    <RequestView selected={selected} folders={folders} variables={variables}
-                        onSave={cols.saveRequest}/>}
+                    <RequestView selected={selected} replay={replay} folders={folders}
+                        variables={variables} onSave={cols.saveRequest}
+                        onSent={() => hist.reload().catch(console.error)}/>}
                 {view === 'environments' &&
                     <EnvironmentsView envSet={envs.envSet} onSave={envs.save} onDelete={envs.remove}/>}
                 {view === 'mock' && selectedMock &&

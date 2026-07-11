@@ -13,14 +13,18 @@ import {ResponseViewer} from './ResponseViewer';
 interface Props {
     /** Currently selected saved request, or null for the scratch editor. */
     selected: {colId: string, req: main.SavedRequest} | null;
+    /** History entry to load into the scratch editor, or null. */
+    replay: main.HistoryEntry | null;
     /** Existing folder names across collections, for the folder autocomplete. */
     folders: string[];
     /** Active environment's variable names, for {{var}} autocomplete. */
     variables: string[];
     onSave: (colId: string, req: main.SavedRequest) => Promise<unknown>;
+    /** Called after every send (success or failure) so the history list refreshes. */
+    onSent: () => void;
 }
 
-export function RequestView({selected, folders, variables, onSave}: Props) {
+export function RequestView({selected, replay, folders, variables, onSave, onSent}: Props) {
     const [name, setName] = useState('');
     const [folder, setFolder] = useState('');
     const [method, setMethod] = useState('GET');
@@ -62,6 +66,29 @@ export function RequestView({selected, folders, variables, onSave}: Props) {
         setError('');
     }, [selected?.req.id]);
 
+    useEffect(() => {
+        if (!replay) return;
+        const r = replay.request;
+        setName('');
+        setFolder('');
+        setMethod(r.method);
+        setUrl(r.url);
+        setParams(rowsFromKV(r.params));
+        setHeaders(rowsFromKV(r.headers));
+        setBody(r.body);
+        setAuthType(r.auth?.type ?? '');
+        setAuthToken(r.auth?.token ?? '');
+        setAuthUser(r.auth?.username ?? '');
+        setAuthPass(r.auth?.password ?? '');
+        setOpen([
+            ...(r.params?.length ? ['params'] : []),
+            ...(r.headers?.length || r.auth?.type ? ['headers'] : []),
+            ...(r.body ? ['body'] : []),
+        ]);
+        setResponse(replay.response ?? null);
+        setError(replay.error ?? '');
+    }, [replay?.id]);
+
     const auth = (): main.Auth =>
         ({type: authType, token: authToken, username: authUser, password: authPass});
 
@@ -101,6 +128,7 @@ export function RequestView({selected, folders, variables, onSave}: Props) {
             setError(String(e));
         } finally {
             setSending(false);
+            onSent();
         }
     }
 

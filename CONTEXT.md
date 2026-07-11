@@ -31,8 +31,11 @@ A named set of variables (e.g. dev/staging/prod). Environments are global (not s
 ### Route
 A rule inside a Mock Server: method + path → the response to return (status, headers, body).
 
+### History Entry
+One recorded send from the Request Client: the request as typed plus its outcome (response or failure). History is client-side — not to be confused with the Request Log, which is what a Mock Server *received*.
+
 ### Request Log
-The list of incoming requests a running Mock Server has received, viewable in the UI.
+The list of incoming requests a running Mock Server has received, viewable in the UI. Mock-side; the client-side counterpart is the History Entry.
 
 ## Product principles
 

@@ -1,7 +1,9 @@
+import {useState} from 'react';
 import {ScrollArea} from '@mantine/core';
 import {main} from '../../../wailsjs/go/models';
 import {CollectionsSection} from './CollectionsSection';
 import {MocksSection} from './MocksSection';
+import {HistorySection} from './HistorySection';
 
 interface Props {
     collections: main.Collection[];
@@ -22,9 +24,15 @@ interface Props {
     onSelectRoute: (m: main.MockServer, routeId: string) => void;
     onAddRoute: (m: main.MockServer) => void;
     onDeleteRoute: (m: main.MockServer, routeId: string) => void;
+
+    history: main.HistoryEntry[];
+    selectedHistoryId: string | null;
+    onSelectHistory: (e: main.HistoryEntry) => void;
+    onClearHistory: () => void;
 }
 
 export function Sidebar(p: Props) {
+    const [historyCollapsed, setHistoryCollapsed] = useState(false);
     return (
         <ScrollArea h="100%" p="xs" type="never">
             <CollectionsSection
@@ -47,6 +55,14 @@ export function Sidebar(p: Props) {
                 onSelectRoute={p.onSelectRoute}
                 onAddRoute={p.onAddRoute}
                 onDeleteRoute={p.onDeleteRoute}
+            />
+            <HistorySection
+                entries={p.history}
+                selectedId={p.selectedHistoryId}
+                collapsed={historyCollapsed}
+                onToggle={() => setHistoryCollapsed(c => !c)}
+                onSelect={p.onSelectHistory}
+                onClear={p.onClearHistory}
             />
         </ScrollArea>
     );

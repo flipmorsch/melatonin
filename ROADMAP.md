@@ -9,6 +9,8 @@ real use decides what gets built.
 
 - Install: `make install` → binary in `~/.local/bin`, launcher entry (done 2026-07-11)
 - Import from Insomnia/Postman: **skipped** — few enough requests to retype by hand (YAGNI)
+- Request history: every send recorded (as typed, failures included), sidebar History
+  section, click to reload into the scratch editor (done 2026-07-11)
 - Friction captured in FRICTION.md as it happens; triaged here after ~a week of use
 - Done when: launched from the OS launcher daily for a week, friction log triaged
 
@@ -47,7 +49,6 @@ real use decides what gets built.
 - Cookie jar UI (client may keep a silent cookie jar; managing/viewing it is future work)
 - GraphQL, gRPC, WebSocket, SSE support
 - Code generation ("copy as curl", etc.)
-- Request history log
 - Import from Postman / Insomnia
 
 - OS-keyring storage for variables marked "secret"
