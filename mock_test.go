@@ -71,6 +71,16 @@ func TestMockServerLifecycle(t *testing.T) {
 	if log[3].Method != "DELETE" || log[3].Path != "/nope" || log[3].Body != "ping" {
 		t.Fatalf("log entry wrong: %+v", log[3])
 	}
+	if log[0].Status != 200 || log[1].Status != 201 || log[3].Status != 404 {
+		t.Fatalf("answered status not logged: %+v", log)
+	}
+
+	if err := a.ClearMockLog(m.ID); err != nil {
+		t.Fatal(err)
+	}
+	if log, _ := a.GetMockLog(m.ID); len(log) != 0 {
+		t.Fatalf("log not cleared: %d entries", len(log))
+	}
 
 	// live route update without restart
 	m.Routes = append(m.Routes, MockRoute{Method: "GET", Path: "/live", Status: 200, Body: "hot"})

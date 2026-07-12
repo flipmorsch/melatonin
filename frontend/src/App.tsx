@@ -5,13 +5,14 @@ import {Brand} from './components/Brand';
 import {Sidebar} from './features/sidebar/Sidebar';
 import {RequestView} from './features/request/RequestView';
 import {EnvironmentsView} from './features/environments/EnvironmentsView';
+import {HistoryDetail} from './features/history/HistoryDetail';
 import {MockView} from './features/mocks/MockView';
 import {useCollections} from './hooks/useCollections';
 import {useEnvironments} from './hooks/useEnvironments';
 import {useHistory} from './hooks/useHistory';
 import {useMocks} from './hooks/useMocks';
 
-type View = 'request' | 'environments' | 'mock';
+type View = 'request' | 'environments' | 'mock' | 'history';
 
 function App() {
     const cols = useCollections();
@@ -22,6 +23,7 @@ function App() {
     const [view, setView] = useState<View>('request');
     const [selected, setSelected] = useState<{colId: string, req: main.SavedRequest} | null>(null);
     const [replay, setReplay] = useState<main.HistoryEntry | null>(null);
+    const [histDetail, setHistDetail] = useState<main.HistoryEntry | null>(null);
     const [selectedMockId, setSelectedMockId] = useState('');
     const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
     const [shellError, setShellError] = useState('');
@@ -45,8 +47,14 @@ function App() {
         setView('request');
     }
 
-    /** Loads a history entry into the scratch editor with its recorded response. */
+    /** Shows a history entry's read-only details. */
     function selectHistory(e: main.HistoryEntry) {
+        setHistDetail(e);
+        setView('history');
+    }
+
+    /** Loads a history entry into the scratch editor with its recorded response. */
+    function openHistoryInEditor(e: main.HistoryEntry) {
         setSelected(null);
         setReplay(e);
         setView('request');
@@ -158,10 +166,14 @@ function App() {
                     onAddRoute={m => run(addRoute(m))}
                     onDeleteRoute={deleteRoute}
                     history={hist.entries}
-                    selectedHistoryId={view === 'request' && !selected ? replay?.id ?? null : null}
+                    selectedHistoryId={
+                        view === 'history' ? histDetail?.id ?? null
+                        : view === 'request' && !selected ? replay?.id ?? null : null}
                     onSelectHistory={selectHistory}
                     onClearHistory={() => {
                         setReplay(null);
+                        setHistDetail(null);
+                        if (view === 'history') setView('request');
                         run(hist.clear());
                     }}
                 />
@@ -176,6 +188,8 @@ function App() {
                         onSent={() => hist.reload().catch(console.error)}/>}
                 {view === 'environments' &&
                     <EnvironmentsView envSet={envs.envSet} onSave={envs.save} onDelete={envs.remove}/>}
+                {view === 'history' && histDetail &&
+                    <HistoryDetail entry={histDetail} onOpenInEditor={openHistoryInEditor}/>}
                 {view === 'mock' && selectedMock &&
                     <MockView
                         mock={selectedMock}
@@ -185,6 +199,7 @@ function App() {
                         onSave={mocks.save}
                         onStart={mocks.start}
                         onStop={mocks.stop}
+                        onClearLog={id => run(mocks.clearLog(id))}
                     />}
             </AppShell.Main>
         </AppShell>

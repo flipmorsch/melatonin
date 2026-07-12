@@ -1,5 +1,6 @@
 import {useCallback, useEffect, useState} from 'react';
 import {
+    ClearMockLog,
     DeleteMockServer,
     GetMockLog,
     ListMockServers,
@@ -60,5 +61,10 @@ export function useMocks() {
         setLogsByMock(prev => ({...prev, [id]: log}));
     };
 
-    return {mocks, running, logsByMock, refresh, save, remove, start, stop, loadLog};
+    const clearLog = async (id: string) => {
+        await ClearMockLog(id);
+        setLogsByMock(prev => ({...prev, [id]: []}));
+    };
+
+    return {mocks, running, logsByMock, refresh, save, remove, start, stop, loadLog, clearLog};
 }

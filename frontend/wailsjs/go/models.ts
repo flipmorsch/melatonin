@@ -292,6 +292,7 @@ export namespace main {
 	    headers: Record<string, Array<string>>;
 	    body: string;
 	    matched: boolean;
+	    status: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new MockLogEntry(source);
@@ -305,6 +306,7 @@ export namespace main {
 	        this.headers = source["headers"];
 	        this.body = source["body"];
 	        this.matched = source["matched"];
+	        this.status = source["status"];
 	    }
 	}
 	export class MockRoute {

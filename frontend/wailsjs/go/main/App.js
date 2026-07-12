@@ -6,6 +6,10 @@ export function ClearHistory() {
   return window['go']['main']['App']['ClearHistory']();
 }
 
+export function ClearMockLog(arg1) {
+  return window['go']['main']['App']['ClearMockLog'](arg1);
+}
+
 export function CreateCollection(arg1) {
   return window['go']['main']['App']['CreateCollection'](arg1);
 }

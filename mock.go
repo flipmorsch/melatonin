@@ -39,6 +39,7 @@ type MockLogEntry struct {
 	Headers map[string][]string `json:"headers"`
 	Body    string              `json:"body"`
 	Matched bool                `json:"matched"`
+	Status  int                 `json:"status"` // what the mock answered (404 when unmatched)
 }
 
 const (
@@ -66,6 +67,12 @@ func (rm *runningMock) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	routes := rm.def.Routes
 	rm.mu.Unlock()
 	route := matchRoute(routes, r.Method, r.URL.Path)
+	status := http.StatusNotFound
+	if route != nil {
+		if status = route.Status; status == 0 {
+			status = http.StatusOK
+		}
+	}
 
 	entry := MockLogEntry{
 		Time:    time.Now().Format("15:04:05"),
@@ -74,6 +81,7 @@ func (rm *runningMock) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Headers: r.Header,
 		Body:    string(body),
 		Matched: route != nil,
+		Status:  status,
 	}
 	rm.mu.Lock()
 	rm.log = append(rm.log, entry)
@@ -87,16 +95,12 @@ func (rm *runningMock) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if route == nil {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusNotFound)
+		w.WriteHeader(status)
 		fmt.Fprintf(w, "melatonin: no route matched %s %s\n", r.Method, r.URL.Path)
 		return
 	}
 	for k, v := range route.Headers {
 		w.Header().Set(k, v)
-	}
-	status := route.Status
-	if status == 0 {
-		status = http.StatusOK
 	}
 	w.WriteHeader(status)
 	w.Write([]byte(route.Body))
@@ -304,6 +308,20 @@ func (a *App) GetMockLog(id string) ([]MockLogEntry, error) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 	return append([]MockLogEntry{}, rm.log...), nil
+}
+
+// ClearMockLog empties a running mock's request log; a no-op when not running.
+func (a *App) ClearMockLog(id string) error {
+	a.mockMu.Lock()
+	rm, ok := a.mocks[id]
+	a.mockMu.Unlock()
+	if !ok {
+		return nil
+	}
+	rm.mu.Lock()
+	rm.log = nil
+	rm.mu.Unlock()
+	return nil
 }
 
 func (a *App) emitMockLog(serverID string, entry MockLogEntry) {

@@ -58,9 +58,10 @@ frontend/src/
 │                        EmptyState, SectionLabel, ConfirmDelete, KVEditor, Chevron,
 │                        CodeEditor — the only file touching CodeMirror, ADR 0004)
 └── features/
-    ├── sidebar/         Sidebar, CollectionsSection, MocksSection, SidebarRow
+    ├── sidebar/         Sidebar, CollectionsSection, MocksSection, HistorySection, SidebarRow
     ├── request/         RequestView, ResponseViewer
     ├── environments/    EnvironmentsView
+    ├── history/         HistoryDetail
     └── mocks/           MockView, RouteCard, RequestLog
 ```
 

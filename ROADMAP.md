@@ -23,6 +23,12 @@ real use decides what gets built.
 - Single-instance lock: a second launch focuses the existing window and exits —
   two instances shared the JSON files with in-process locking only, so auto-save
   and mock restore could clobber each other (done 2026-07-12)
+- Mock view revamp: auto-save (Save button removed, parity with the request editor),
+  copyable base URL while running, roomier route editor, request log with answered
+  status + count + clear (done 2026-07-12)
+- History detail view: clicking an entry shows a read-only record (sent request,
+  resolved URL, full response) instead of hijacking the scratch editor; "Open in
+  editor" does the old replay (done 2026-07-12)
 - Friction captured in FRICTION.md as it happens; triaged here after ~a week of use
 - Done when: launched from the OS launcher daily for a week, friction log triaged
 

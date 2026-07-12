@@ -4,6 +4,8 @@ import {main} from '../models';
 
 export function ClearHistory():Promise<void>;
 
+export function ClearMockLog(arg1:string):Promise<void>;
+
 export function CreateCollection(arg1:string):Promise<main.Collection>;
 
 export function DeleteCollection(arg1:string):Promise<void>;
