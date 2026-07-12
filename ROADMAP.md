@@ -20,6 +20,9 @@ real use decides what gets built.
 - Mock run-state restored on launch: a mock running when the app closes comes back
   when it opens — first friction actually observed in the field, via history.json
   (done 2026-07-12)
+- Single-instance lock: a second launch focuses the existing window and exits —
+  two instances shared the JSON files with in-process locking only, so auto-save
+  and mock restore could clobber each other (done 2026-07-12)
 - Friction captured in FRICTION.md as it happens; triaged here after ~a week of use
 - Done when: launched from the OS launcher daily for a week, friction log triaged
 

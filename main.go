@@ -25,7 +25,13 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 12, G: 14, B: 22, A: 1}, // --ink-0
 		OnStartup:        app.startup,
-		Bind: []interface{}{
+		// two instances would fight over the data files (in-process locking only)
+		// and over mock ports; a second launch just focuses the existing window
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId:               "melatonin-1c8672f3-4a9f-4a2e-9a3f-6a2f0d6a51b7",
+			OnSecondInstanceLaunch: app.focusFromSecondInstance,
+		},
+		Bind: []any{
 			app,
 		},
 	})

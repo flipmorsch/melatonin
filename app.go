@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -54,6 +55,13 @@ func (a *App) startup(ctx context.Context) {
 		runtime.EventsEmit(ctx, name, data...)
 	}
 	a.restoreMocks()
+}
+
+// focusFromSecondInstance runs in the first instance when a second launch is
+// blocked by the single-instance lock: bring the existing window forward.
+func (a *App) focusFromSecondInstance(options.SecondInstanceData) {
+	runtime.WindowUnminimise(a.ctx)
+	runtime.Show(a.ctx)
 }
 
 // Auth is a header shortcut: bearer fills Authorization: Bearer <token>,
