@@ -8,3 +8,6 @@ raw — triage into ROADMAP.md later.
 - 2026-07-11: (assumed on user's behalf while AFK) previous send vanishes the moment you
   tweak and resend — no record of what was sent. → built: request history. Correct or
   delete this line if the real friction was something else.
+- 2026-07-12: (observed in history.json) first send of the day → `connection refused
+  127.0.0.1:9123` — mocks don't survive app restart, must be manually started every
+  launch. → built: run-state restore on launch.

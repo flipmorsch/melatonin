@@ -53,6 +53,7 @@ func (a *App) startup(ctx context.Context) {
 	a.emitEvent = func(name string, data ...any) {
 		runtime.EventsEmit(ctx, name, data...)
 	}
+	a.restoreMocks()
 }
 
 // Auth is a header shortcut: bearer fills Authorization: Bearer <token>,

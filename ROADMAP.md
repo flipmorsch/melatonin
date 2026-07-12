@@ -17,6 +17,9 @@ real use decides what gets built.
 - Auto-save: edits to a saved request persist automatically (debounced, flushed on
   switch/unmount); Save button removed. Fixes silent edit loss when clicking another
   request in the sidebar (done 2026-07-11)
+- Mock run-state restored on launch: a mock running when the app closes comes back
+  when it opens — first friction actually observed in the field, via history.json
+  (done 2026-07-12)
 - Friction captured in FRICTION.md as it happens; triaged here after ~a week of use
 - Done when: launched from the OS launcher daily for a week, friction log triaged
 

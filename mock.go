@@ -29,6 +29,7 @@ type MockServer struct {
 	Port            int         `json:"port"`
 	ExposeOnNetwork bool        `json:"exposeOnNetwork"`
 	Routes          []MockRoute `json:"routes"`
+	Running         bool        `json:"running"` // run-state, persisted so app launch can restore it
 }
 
 type MockLogEntry struct {
@@ -153,6 +154,11 @@ func (a *App) ListMockServers() ([]MockServer, error) {
 // SaveMockServer upserts the whole definition (name, port, routes). A running
 // instance picks up route edits live; a port change needs a restart.
 func (a *App) SaveMockServer(m MockServer) (*MockServer, error) {
+	// persist the actual run-state, not whatever a possibly-stale frontend object carries
+	a.mockMu.Lock()
+	_, m.Running = a.mocks[m.ID]
+	a.mockMu.Unlock()
+
 	a.mu.Lock()
 	if m.ID == "" {
 		m.ID = newID()
@@ -188,6 +194,14 @@ func (a *App) DeleteMockServer(id string) error {
 // ---------- runtime ----------
 
 func (a *App) StartMockServer(id string) error {
+	if err := a.startMock(id); err != nil {
+		return err
+	}
+	a.persistRunning(id, true)
+	return nil
+}
+
+func (a *App) startMock(id string) error {
 	a.mu.Lock()
 	var def MockServer
 	err := readJSONFile(a.mockPath(id), &def)
@@ -232,7 +246,39 @@ func (a *App) StopMockServer(id string) error {
 	if !ok {
 		return nil
 	}
-	return rm.srv.Close()
+	err := rm.srv.Close()
+	a.persistRunning(id, false)
+	return err
+}
+
+// persistRunning records run-state in the def file so app launch can restore it.
+// Best-effort: run-state is a convenience, never worth failing a start/stop over.
+func (a *App) persistRunning(id string, running bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var m MockServer
+	if err := readJSONFile(a.mockPath(id), &m); err != nil || m.Running == running {
+		return
+	}
+	m.Running = running
+	_ = writeJSONFile(a.mockPath(id), &m)
+}
+
+// restoreMocks starts every mock that was running when the app last closed.
+// Best-effort: a mock whose port is now taken just stays stopped; the intent
+// is kept in its file, so the next launch tries again.
+func (a *App) restoreMocks() {
+	mocks, err := a.ListMockServers()
+	if err != nil {
+		return
+	}
+	for _, m := range mocks {
+		if m.Running {
+			if err := a.startMock(m.ID); err != nil {
+				fmt.Printf("melatonin: could not restore mock %q: %v\n", m.Name, err)
+			}
+		}
+	}
 }
 
 // RunningMockServers maps running mock IDs to their actual listening port.

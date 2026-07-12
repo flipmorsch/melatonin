@@ -333,6 +333,7 @@ export namespace main {
 	    port: number;
 	    exposeOnNetwork: boolean;
 	    routes: MockRoute[];
+	    running: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new MockServer(source);
@@ -345,6 +346,7 @@ export namespace main {
 	        this.port = source["port"];
 	        this.exposeOnNetwork = source["exposeOnNetwork"];
 	        this.routes = this.convertValues(source["routes"], MockRoute);
+	        this.running = source["running"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

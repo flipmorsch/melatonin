@@ -94,3 +94,46 @@ func TestMockServerLifecycle(t *testing.T) {
 		t.Fatal("double stop should be a no-op")
 	}
 }
+
+func TestMockRunStateRestoredOnLaunch(t *testing.T) {
+	a1 := testApp(t)
+	m, err := a1.SaveMockServer(MockServer{Name: "api", Port: 0,
+		Routes: []MockRoute{{Method: "GET", Path: "/ping", Status: 200, Body: "pong"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a1.StartMockServer(m.ID); err != nil {
+		t.Fatal(err)
+	}
+	defer a1.StopMockServer(m.ID)
+	// no Stop — simulates the app closing while the mock was running
+
+	// restoreMocks directly rather than startup(): a real Wails context can't
+	// exist in tests, and EventsEmit log.Fatals on any other context
+	a2 := NewApp()
+	a2.dataDir = a1.dataDir
+	a2.restoreMocks()
+	port, ok := a2.RunningMockServers()[m.ID]
+	if !ok {
+		t.Fatal("running mock not restored on next launch")
+	}
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/ping", port))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("restored mock answered %d", resp.StatusCode)
+	}
+
+	// an explicit stop persists that intent: the next launch must not restore
+	if err := a2.StopMockServer(m.ID); err != nil {
+		t.Fatal(err)
+	}
+	a3 := NewApp()
+	a3.dataDir = a1.dataDir
+	a3.restoreMocks()
+	if len(a3.RunningMockServers()) != 0 {
+		t.Fatal("explicitly stopped mock came back on launch")
+	}
+}
