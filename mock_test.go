@@ -74,6 +74,9 @@ func TestMockServerLifecycle(t *testing.T) {
 	if log[0].Status != 200 || log[1].Status != 201 || log[3].Status != 404 {
 		t.Fatalf("answered status not logged: %+v", log)
 	}
+	if log[0].RouteID != m.Routes[0].ID || log[1].RouteID != m.Routes[1].ID || log[3].RouteID != "" {
+		t.Fatalf("answering route not logged: %+v", log)
+	}
 
 	if err := a.ClearMockLog(m.ID); err != nil {
 		t.Fatal(err)

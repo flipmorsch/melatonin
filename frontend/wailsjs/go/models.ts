@@ -293,6 +293,7 @@ export namespace main {
 	    body: string;
 	    matched: boolean;
 	    status: number;
+	    routeId: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new MockLogEntry(source);
@@ -307,6 +308,7 @@ export namespace main {
 	        this.body = source["body"];
 	        this.matched = source["matched"];
 	        this.status = source["status"];
+	        this.routeId = source["routeId"];
 	    }
 	}
 	export class MockRoute {

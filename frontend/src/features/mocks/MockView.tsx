@@ -90,6 +90,8 @@ export function MockView({mock, selectedRouteId, runningPort, log, onSave, onSta
 
     const running = runningPort !== undefined;
     const baseUrl = running ? `http://127.0.0.1:${runningPort}` : '';
+    // with a route selected, the log shows only what that route answered
+    const shownLog = route ? log.filter(e => e.routeId === route.id) : log;
 
     // the selected route's edits are merged over the stored routes
     const def = (): main.MockServer => main.MockServer.createFrom({
@@ -191,13 +193,14 @@ export function MockView({mock, selectedRouteId, runningPort, log, onSave, onSta
                         </EmptyState>}
 
                     <Group gap="xs" mt="xs">
-                        <SectionLabel>Request Log</SectionLabel>
+                        <SectionLabel>{route ? 'Request Log — this route' : 'Request Log'}</SectionLabel>
+                        {shownLog.length > 0 &&
+                            <Badge size="xs" variant="light" color="gray">{shownLog.length}</Badge>}
                         {log.length > 0 &&
-                            <Badge size="xs" variant="light" color="gray">{log.length}</Badge>}
-                        {log.length > 0 &&
-                            <ConfirmDelete title="Clear log" onConfirm={() => onClearLog(mock.id)}/>}
+                            <ConfirmDelete title="Clear log (whole server)"
+                                onConfirm={() => onClearLog(mock.id)}/>}
                     </Group>
-                    <RequestLog entries={log} running={running}/>
+                    <RequestLog entries={shownLog} running={running} routeFiltered={!!route}/>
                 </Stack>
             </ScrollArea>
         </Stack>

@@ -7,15 +7,19 @@ import {EmptyState} from '../../components/EmptyState';
 interface Props {
     entries: main.MockLogEntry[];
     running: boolean;
+    /** True when showing only one route's traffic. */
+    routeFiltered?: boolean;
 }
 
 /** Incoming requests, newest first. Entries expand to show headers and body. */
-export function RequestLog({entries, running}: Props) {
+export function RequestLog({entries, running, routeFiltered}: Props) {
     if (entries.length === 0) {
         return <EmptyState>
-            {running
-                ? 'No requests yet — anything sent to this server will appear here'
-                : 'Log is empty — it fills while the server runs and clears on start'}
+            {routeFiltered
+                ? 'Nothing answered by this route yet — select the server to see all traffic'
+                : running
+                    ? 'No requests yet — anything sent to this server will appear here'
+                    : 'Log is empty — it fills while the server runs and clears on start'}
         </EmptyState>;
     }
     return (

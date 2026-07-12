@@ -39,7 +39,8 @@ type MockLogEntry struct {
 	Headers map[string][]string `json:"headers"`
 	Body    string              `json:"body"`
 	Matched bool                `json:"matched"`
-	Status  int                 `json:"status"` // what the mock answered (404 when unmatched)
+	Status  int                 `json:"status"`  // what the mock answered (404 when unmatched)
+	RouteID string              `json:"routeId"` // route that answered; "" when unmatched
 }
 
 const (
@@ -68,10 +69,12 @@ func (rm *runningMock) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rm.mu.Unlock()
 	route := matchRoute(routes, r.Method, r.URL.Path)
 	status := http.StatusNotFound
+	routeID := ""
 	if route != nil {
 		if status = route.Status; status == 0 {
 			status = http.StatusOK
 		}
+		routeID = route.ID
 	}
 
 	entry := MockLogEntry{
@@ -82,6 +85,7 @@ func (rm *runningMock) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Body:    string(body),
 		Matched: route != nil,
 		Status:  status,
+		RouteID: routeID,
 	}
 	rm.mu.Lock()
 	rm.log = append(rm.log, entry)
