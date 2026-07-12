@@ -41,6 +41,9 @@ func TestSendRequestSubstitutesActiveEnvironment(t *testing.T) {
 	if res.Status != http.StatusOK || res.Body != "ok" {
 		t.Fatalf("status=%d body=%q — substitution did not reach the wire", res.Status, res.Body)
 	}
+	if res.FinalURL != srv.URL+"/users" {
+		t.Fatalf("finalUrl should be the resolved URL, got %q", res.FinalURL)
+	}
 }
 
 func TestSendRequestParamsAndAuth(t *testing.T) {

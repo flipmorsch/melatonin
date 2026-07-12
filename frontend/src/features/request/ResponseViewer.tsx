@@ -16,6 +16,11 @@ export function ResponseViewer({response, error}: Props) {
             {error &&
                 <Text size="sm" ff="monospace" c="red.4" style={{whiteSpace: 'pre-wrap'}}>{error}</Text>}
             {response && <>
+                {response.finalUrl &&
+                    <Text size="xs" ff="monospace" c="dark.2" mb={4} truncate
+                        title={response.finalUrl}>
+                        {response.finalUrl}
+                    </Text>}
                 <Group gap="md" mb="xs" ff="monospace" fz="sm">
                     <Text ff="monospace" fz="sm" fw={700}
                         c={response.status < 400 ? 'teal.4' : 'red.4'}>

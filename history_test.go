@@ -39,6 +39,9 @@ func TestHistoryRecordsSends(t *testing.T) {
 	if h[1].Request.URL != srv.URL+"/big" || h[1].Response == nil {
 		t.Fatalf("oldest entry should be the successful send: %+v", h[1])
 	}
+	if h[1].Response.FinalURL != srv.URL+"/big" {
+		t.Fatalf("resolved URL not recorded: %q", h[1].Response.FinalURL)
+	}
 	if len(h[1].Response.Body) != historyBodyCap || !h[1].Response.Truncated {
 		t.Fatalf("stored body not clipped to cap: len=%d truncated=%v",
 			len(h[1].Response.Body), h[1].Response.Truncated)

@@ -186,6 +186,7 @@ export namespace main {
 	    durationMs: number;
 	    size: number;
 	    truncated: boolean;
+	    finalUrl: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ResponseData(source);
@@ -200,6 +201,7 @@ export namespace main {
 	        this.durationMs = source["durationMs"];
 	        this.size = source["size"];
 	        this.truncated = source["truncated"];
+	        this.finalUrl = source["finalUrl"];
 	    }
 	}
 	export class RequestInput {

@@ -99,6 +99,7 @@ type ResponseData struct {
 	DurationMs int64               `json:"durationMs"`
 	Size       int                 `json:"size"`
 	Truncated  bool                `json:"truncated"`
+	FinalURL   string              `json:"finalUrl"` // after {{var}} substitution and param rows
 }
 
 var varPattern = regexp.MustCompile(`\{\{\s*([\w-]+)\s*\}\}`)
@@ -212,5 +213,6 @@ func (a *App) send(in RequestInput) (*ResponseData, error) {
 		DurationMs: time.Since(start).Milliseconds(),
 		Size:       len(data),
 		Truncated:  truncated,
+		FinalURL:   finalURL,
 	}, nil
 }

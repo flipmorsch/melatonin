@@ -15,6 +15,14 @@ interface Props {
     onClear: () => void;
 }
 
+/** Just the path of an as-typed URL: strips scheme+host or a {{var}} prefix,
+ * and the query string. Unrecognized shapes are shown as-is. */
+function pathOf(url: string): string {
+    const noQuery = url.split('?')[0];
+    const m = noQuery.match(/^(?:https?:\/\/[^/]*|\{\{[^}]*\}\})(\/.*)?$/);
+    return m ? (m[1] || '/') : noQuery;
+}
+
 /** Outcome column: status code colored by class, or ERR for failed sends. */
 function outcome(e: main.HistoryEntry) {
     if (!e.response) return <Text size="xs" ff="monospace" c="red.4">ERR</Text>;
@@ -48,7 +56,7 @@ export function HistorySection(p: Props) {
                     selected={p.selectedId === e.id}
                     onClick={() => p.onSelect(e)}
                     left={<MethodBadge method={e.request.method}/>}
-                    label={e.request.url}
+                    label={pathOf(e.request.url)}
                     right={<>
                         {outcome(e)}
                         <Text size="xs" ff="monospace" c="dark.2">{e.time.slice(11, 16)}</Text>
