@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {AppShell, Button, Group, NativeSelect, Text} from '@mantine/core';
 import {main} from '../wailsjs/go/models';
 import {Brand} from './components/Brand';
@@ -11,6 +11,9 @@ import {useCollections} from './hooks/useCollections';
 import {useEnvironments} from './hooks/useEnvironments';
 import {useHistory} from './hooks/useHistory';
 import {useMocks} from './hooks/useMocks';
+import {CommandPalette, PaletteItem} from './components/CommandPalette';
+import {MethodBadge} from './components/MethodBadge';
+import {RunDot} from './components/RunDot';
 
 type View = 'request' | 'environments' | 'mock' | 'history';
 
@@ -27,6 +30,7 @@ function App() {
     const [selectedMockId, setSelectedMockId] = useState('');
     const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
     const [shellError, setShellError] = useState('');
+    const [paletteOpen, setPaletteOpen] = useState(false);
 
     const environments = envs.envSet?.environments ?? [];
     const variables = Object.keys(
@@ -40,6 +44,70 @@ function App() {
         setShellError('');
         p.catch(e => setShellError(String(e)));
     };
+
+    // Ctrl+K / Cmd+K opens the command palette
+    useEffect(() => {
+        function onKey(e: KeyboardEvent) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                setPaletteOpen(o => !o);
+            }
+        }
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
+
+    const paletteItems: PaletteItem[] = useMemo(() => {
+        const out: PaletteItem[] = [];
+        for (const col of cols.collections) {
+            for (const req of (col.requests ?? [])) {
+                out.push({
+                    id: `req:${req.id}`,
+                    label: req.name,
+                    detail: col.name,
+                    left: <MethodBadge method={req.method}/>,
+                    onSelect: () => selectRequest(col.id, req),
+                });
+            }
+        }
+        for (const m of mocks.mocks) {
+            const port = mocks.running[m.id];
+            out.push({
+                id: `mock:${m.id}`,
+                label: m.name,
+                detail: port ? `Running on :${port}` : `Port ${m.port}`,
+                left: <RunDot on={port !== undefined}/>,
+                onSelect: () => selectMock(m),
+            });
+            for (const r of (m.routes ?? [])) {
+                out.push({
+                    id: `route:${r.id}`,
+                    label: r.path,
+                    detail: `${m.name} · ${r.status}`,
+                    left: <MethodBadge method={r.method}/>,
+                    onSelect: () => selectRoute(m, r.id),
+                });
+            }
+        }
+        for (const e of hist.entries.slice(0, 30)) {
+            out.push({
+                id: `hist:${e.id}`,
+                label: e.request.url.split('?')[0],
+                detail: `${e.request.method} · ${new Date(e.time).toLocaleTimeString()}`,
+                left: <MethodBadge method={e.request.method}/>,
+                onSelect: () => openHistoryInEditor(e),
+            });
+        }
+        for (const env of environments) {
+            out.push({
+                id: `env:${env.id}`,
+                label: env.name,
+                detail: `${Object.keys(env.variables ?? {}).length} variables`,
+                onSelect: () => { envs.setActive(env.id); setView('environments'); },
+            });
+        }
+        return out;
+    }, [cols.collections, mocks.mocks, mocks.running, hist.entries, environments]);
 
     function selectRequest(colId: string, req: main.SavedRequest) {
         setSelected({colId, req});
@@ -202,6 +270,7 @@ function App() {
                         onClearLog={id => run(mocks.clearLog(id))}
                     />}
             </AppShell.Main>
+            <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={paletteItems}/>
         </AppShell>
     );
 }

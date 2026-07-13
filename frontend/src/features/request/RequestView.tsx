@@ -1,7 +1,7 @@
 import {ReactNode, useEffect, useRef, useState} from 'react';
 import {
     Accordion, ActionIcon, Autocomplete, Badge, Button, Checkbox, Group,
-    NativeSelect, NumberInput, PasswordInput, Stack, TextInput,
+    NativeSelect, NumberInput, PasswordInput, Stack, Text, TextInput,
 } from '@mantine/core';
 import {SendRequest} from '../../../wailsjs/go/main/App';
 import {main} from '../../../wailsjs/go/models';
@@ -45,6 +45,7 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
     const [response, setResponse] = useState<main.ResponseData | null>(null);
     const [error, setError] = useState('');
     const [sending, setSending] = useState(false);
+    const [saveState, setSaveState] = useState<'saved' | 'dirty' | 'saving'>('saved');
 
     /** Debounced auto-save not yet written to disk. */
     const pending = useRef<{timer: number, colId: string, req: main.SavedRequest} | null>(null);
@@ -109,6 +110,21 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
         setError(replay.error ?? '');
     }, [replay?.id]);
 
+    // Ctrl+Enter / Cmd+Enter sends the request from anywhere in the view.
+    // Ref avoids stale closure: the listener is registered once but always calls latest send().
+    const sendRef = useRef(send);
+    sendRef.current = send;
+    useEffect(() => {
+        function onKey(e: KeyboardEvent) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                sendRef.current();
+            }
+        }
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
+
     const auth = (): main.Auth =>
         ({type: authType, token: authToken, username: authUser, password: authPass});
 
@@ -126,8 +142,10 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
         if (!selected) return;
         if (justLoaded.current) {
             justLoaded.current = false;
+            setSaveState('saved');
             return;
         }
+        setSaveState('dirty');
         if (pending.current) clearTimeout(pending.current.timer);
         const colId = selected.colId;
         const req = main.SavedRequest.createFrom({
@@ -142,9 +160,12 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
             auth: auth(),
             options: options(),
         });
+        setSaveState('saving');
         const timer = window.setTimeout(() => {
             pending.current = null;
-            onSave(colId, req).catch(e => setError(String(e)));
+            onSave(colId, req)
+                .then(() => setSaveState('saved'))
+                .catch(e => setError(String(e)));
         }, 600);
         pending.current = {timer, colId, req};
     }, [name, folder, method, url, params, headers, body,
@@ -217,6 +238,7 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
                     onChange={e => setName(e.target.value)}
                     placeholder={selected ? 'Request name' : 'Unsaved scratch request'}
                     disabled={!selected}
+                    aria-label="Request name"
                 />
                 <Autocomplete
                     w={170}
@@ -225,7 +247,14 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
                     data={folders}
                     placeholder="Folder (optional)"
                     disabled={!selected}
+                    aria-label="Folder"
                 />
+                {selected && saveState !== 'saved' &&
+                    <Text size="xs" ff="monospace" c={saveState === 'saving' ? 'dark.2' : 'yellow.4'}
+                        title={saveState === 'saving' ? 'Saving…' : 'Modified'}
+                        style={{flexShrink: 0, userSelect: 'none'}}>
+                        {saveState === 'saving' ? '●' : '○'}
+                    </Text>}
             </Group>
 
             <form onSubmit={e => { e.preventDefault(); send(); }}>
@@ -236,6 +265,7 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
                         value={method}
                         onChange={e => setMethod(e.target.value)}
                         data={METHODS}
+                        aria-label="HTTP method"
                     />
                     <TextInput
                         style={{flex: 1}}
@@ -244,6 +274,7 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
                         onChange={e => setUrl(e.target.value)}
                         placeholder="https://api.example.com/path or {{baseUrl}}/path"
                         autoFocus
+                        aria-label="Request URL"
                     />
                     <Button type="submit" loading={sending} disabled={!url}>Send</Button>
                 </Group>

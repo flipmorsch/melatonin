@@ -24,7 +24,7 @@ export function ResponseViewer({response, error}: Props) {
                 <Group gap="md" mb="xs" ff="monospace" fz="sm">
                     <Text ff="monospace" fz="sm" fw={700}
                         c={response.status < 400 ? 'teal.4' : 'red.4'}>
-                        {response.status} {response.statusText}
+                        {response.status < 400 ? '\u2713' : '\u2717'} {response.status} {response.statusText}
                     </Text>
                     <Text ff="monospace" fz="sm" c="dark.2">{response.durationMs} ms</Text>
                     <Text ff="monospace" fz="sm" c="dark.2">{response.size} B</Text>

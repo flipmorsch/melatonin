@@ -26,7 +26,7 @@ export function SidebarRow({label, left, leading, right, selected, indent, onCli
             ml={indent ? 12 : 0}
             style={{
                 borderRadius: 'var(--mantine-radius-sm)',
-                background: selected ? 'rgba(130, 102, 240, 0.16)' : undefined,
+                background: selected ? 'var(--selected-bg)' : undefined,
             }}
         >
             {leading}

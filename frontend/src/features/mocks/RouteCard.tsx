@@ -26,12 +26,14 @@ export function RouteCard({draft, onChange}: Props) {
                         value={draft.method}
                         onChange={e => onChange({method: e.target.value})}
                         data={METHODS}
+                        aria-label="Route method"
                     />
                     <TextInput
                         style={{flex: 1}} size="xs" className="mono-input"
                         value={draft.path}
                         onChange={e => onChange({path: e.target.value})}
                         placeholder="/users or /files/*"
+                        aria-label="Route path"
                     />
                     <TextInput
                         w={70} size="xs" className="mono-input"
@@ -39,6 +41,7 @@ export function RouteCard({draft, onChange}: Props) {
                         onChange={e => onChange({status: e.target.value})}
                         placeholder="200"
                         title="Response status code"
+                        aria-label="Response status code"
                     />
                 </Group>
                 <Text size="xs" c="dark.2">Response headers</Text>

@@ -22,9 +22,13 @@
     /* signature: the dusk horizon */
     --horizon: linear-gradient(90deg,
         #1b1740 0%, #4230a8 30%, #8266f0 55%, #b06e9a 80%, #d99a68 100%);
+
+    /* brand alpha tokens */
+    --selected-bg: color-mix(in srgb, var(--mantine-color-violet-4) 16%, transparent);
+    --selection-bg: color-mix(in srgb, var(--mantine-color-violet-4) 25%, transparent);
 }
 
-::selection { background: rgba(130, 102, 240, 0.25); }
+::selection { background: var(--selection-bg); }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -110,8 +114,7 @@ input::placeholder, textarea::placeholder {
 }
 
 /* delete buttons on list rows reveal on hover */
-.row-reveal { visibility: hidden; }
-.hover-row:hover .row-reveal { visibility: visible; }
+.hover-row:hover .row-reveal, .hover-row:focus-within .row-reveal { visibility: visible; }
 
 /* sidebar / list rows */
 .side-row {
@@ -132,4 +135,10 @@ input::placeholder, textarea::placeholder {
 .mono-input input, .mono-input textarea, textarea.mono-input {
     font-family: var(--mantine-font-family-monospace);
     font-size: var(--mantine-font-size-sm);
+}
+
+/* restore visible focus on UnstyledButton for keyboard navigation */
+[data-mantine-button]:focus-visible {
+    outline: 2px solid var(--mantine-color-violet-4);
+    outline-offset: 2px;
 }

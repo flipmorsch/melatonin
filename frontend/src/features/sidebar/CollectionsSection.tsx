@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useMemo, useState} from 'react';
 import {ActionIcon, Box, Group, Text, TextInput, UnstyledButton} from '@mantine/core';
 import {main} from '../../../wailsjs/go/models';
 import {groupByFolder} from '../../lib/kv';
@@ -21,8 +21,20 @@ interface Props {
 
 export function CollectionsSection(p: Props) {
     const [newName, setNewName] = useState<string | null>(null);
+    const [filter, setFilter] = useState('');
     // collapsed collection ids and `${colId}/${folder}` keys; default expanded
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+    const filtered = useMemo(() => {
+        if (!filter.trim()) return p.collections;
+        const q = filter.toLowerCase();
+        return p.collections
+            .map(col => ({
+                ...col,
+                requests: (col.requests ?? []).filter(r => r.name.toLowerCase().includes(q)),
+            }))
+            .filter(col => col.requests.length > 0);
+    }, [p.collections, filter]);
 
     const toggle = (key: string) => setCollapsed(prev => {
         const next = new Set(prev);
@@ -48,6 +60,14 @@ export function CollectionsSection(p: Props) {
                 <ActionIcon size="sm" variant="subtle" color="gray" title="New collection"
                     onClick={() => setNewName(newName === null ? '' : null)}>+</ActionIcon>
             </Group>
+            {p.collections.length > 0 &&
+                <TextInput
+                    size="xs" px="xs" mb="xs"
+                    value={filter}
+                    onChange={e => setFilter(e.target.value)}
+                    placeholder="Filter requests…"
+                    aria-label="Filter requests"
+                />}
 
             {newName !== null &&
                 <form onSubmit={e => {
@@ -66,10 +86,12 @@ export function CollectionsSection(p: Props) {
                     />
                 </form>}
 
-            {p.collections.length === 0 && newName === null &&
+            {filtered.length === 0 && newName === null && !filter.trim() &&
                 <EmptyState>No collections yet — create one to save requests</EmptyState>}
+            {filtered.length === 0 && p.collections.length > 0 && filter.trim() &&
+                <EmptyState>{`No requests match "${filter}"`}</EmptyState>}
 
-            {p.collections.map(col =>
+            {filtered.map(col =>
                 <Box key={col.id} mb="sm">
                     <Group gap={2} px="xs" className="hover-row" wrap="nowrap">
                         <UnstyledButton onClick={() => toggle(col.id)}

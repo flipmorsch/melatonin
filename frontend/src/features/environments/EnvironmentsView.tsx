@@ -86,6 +86,7 @@ export function EnvironmentsView({envSet, onSave, onDelete}: Props) {
                             value={name}
                             onChange={e => setName(e.target.value)}
                             placeholder="Environment name"
+                            aria-label="Environment name"
                         />
                         <Button onClick={save}>Save</Button>
                         <ConfirmDelete variant="button" onConfirm={remove}/>
@@ -98,6 +99,7 @@ export function EnvironmentsView({envSet, onSave, onDelete}: Props) {
                         value={varsText}
                         onChange={e => setVarsText(e.target.value)}
                         placeholder={'Variables, one per line:\nbaseUrl: https://api.example.com\ntoken: abc123\n\nUse them anywhere as {{baseUrl}}'}
+                        aria-label="Environment variables"
                     />
                 </> : <EmptyState>Select or create an environment</EmptyState>}
             </Stack>

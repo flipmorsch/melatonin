@@ -12,11 +12,11 @@ import {tags as t} from '@lezer/highlight';
 
 // JSON tokens in the night palette (DESIGN.md): violet keys, method-hue accents.
 const nightHighlight = HighlightStyle.define([
-    {tag: t.propertyName, color: '#b3a6fa'},
-    {tag: t.string, color: '#5bd6a2'},
-    {tag: t.number, color: '#eec468'},
-    {tag: [t.bool, t.null], color: '#f0995f'},
-    {tag: [t.punctuation, t.separator, t.bracket], color: '#a09dbb'},
+    {tag: t.propertyName, color: 'var(--mantine-color-violet-2)'},
+    {tag: t.string, color: 'var(--m-get)'},
+    {tag: t.number, color: 'var(--m-put)'},
+    {tag: [t.bool, t.null], color: 'var(--m-patch)'},
+    {tag: [t.punctuation, t.separator, t.bracket], color: 'var(--mantine-color-dark-1)'},
 ]);
 
 const chrome = (variant: 'input' | 'fill', minHeight: number) => EditorView.theme({

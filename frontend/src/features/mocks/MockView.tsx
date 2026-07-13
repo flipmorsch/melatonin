@@ -146,6 +146,7 @@ export function MockView({mock, selectedRouteId, runningPort, log, onSave, onSta
                     value={name}
                     onChange={e => setName(e.target.value)}
                     placeholder="Mock server name"
+                    aria-label="Mock server name"
                 />
                 <TextInput
                     w={90} className="mono-input"
@@ -154,6 +155,7 @@ export function MockView({mock, selectedRouteId, runningPort, log, onSave, onSta
                     placeholder="Port"
                     disabled={running}
                     title={running ? 'Stop the server to change the port' : 'Port (0 = auto)'}
+                    aria-label="Port"
                 />
                 <Switch
                     label="expose on network"
