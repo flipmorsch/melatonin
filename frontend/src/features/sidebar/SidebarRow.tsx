@@ -72,7 +72,7 @@ export function SidebarRow({label, rowId, left, leading, right, selected, depth,
             className="side-row"
             w={hasDepth ? `calc(100% - ${d * 16}px)` : '100%'}
             ml={d * 16}
-            px={4}
+            px="xs"
             py={3}
             style={{
                 display: 'flex',

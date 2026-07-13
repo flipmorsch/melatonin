@@ -1,5 +1,5 @@
 import {useMemo, useState, ReactNode, useRef} from 'react';
-import {ActionIcon, Box, Group, Text, TextInput, UnstyledButton} from '@mantine/core';
+import {ActionIcon, Box, Group, Stack, Text, TextInput, UnstyledButton} from '@mantine/core';
 import {IconChevronRight, IconDotsVertical, IconFolderPlus, IconGripVertical} from '@tabler/icons-react';
 import {
     CollisionDetection,
@@ -93,8 +93,8 @@ function SortableFolderRow({folder, colId, depth, collapsed, onToggle, onAddRequ
     return (
         <Box ref={setNodeRef} style={style}>
             {/* pr not px: Mantine style props override the style prop, so px would kill the depth indent */}
-            <Group gap={2} pr="xs" className="side-row" wrap="nowrap"
-                style={{paddingLeft: `${4 + depth * 16}px`, minHeight: 32, borderRadius: 'var(--mantine-radius-sm)'}}
+            <Group gap={4} pr="xs" className="side-row" wrap="nowrap"
+                style={{paddingLeft: `${10 + depth * 16}px`, minHeight: 32, borderRadius: 'var(--mantine-radius-sm)'}}
                 onContextMenu={e => { e.preventDefault(); openSidebarMenu(e.clientX, e.clientY, actions); }}>
                 <Box
                     ref={setActivatorNodeRef}
@@ -133,8 +133,9 @@ function SortableFolderRow({folder, colId, depth, collapsed, onToggle, onAddRequ
 
             {requestRows}
             {subfolderRows}
+            {/* hint indent 26 = child row indent (16) + row px (10): the child glyph rail */}
             {!isCollapsed && folder.requests.length === 0 && folder.folders.length === 0 &&
-                <Text size="xs" c="dark.3" style={{paddingLeft: `${20 + depth * 16}px`}} py={4}>
+                <Text size="xs" c="dark.2" style={{paddingLeft: `${26 + depth * 16}px`}} py={2}>
                     Empty folder
                 </Text>}
         </Box>
@@ -377,6 +378,7 @@ export function CollectionsSection(p: Props) {
                 {filtered.length === 0 && p.collections.length > 0 && filter.trim() &&
                     <EmptyState>{`No requests match "${filter}"`}</EmptyState>}
 
+                <Stack gap="sm">
                 {filtered.map(col => {
                     const colActions: ContextAction[] = [
                         {label: 'New request', onClick: () => p.onAddRequest(col.id)},
@@ -389,9 +391,9 @@ export function CollectionsSection(p: Props) {
                         }},
                     ];
                     return (
-                    <Box key={col.id} mb="sm">
+                    <Box key={col.id}>
                         <RootDropZone colId={col.id}>
-                        <Group gap={2} px={4} py={3} className="side-row" wrap="nowrap"
+                        <Group gap={4} px="xs" py={3} className="side-row" wrap="nowrap"
                             data-sidebar-row={`col:${col.id}`} tabIndex={-1}
                             style={{minHeight: 32, borderRadius: 'var(--mantine-radius-sm)'}}
                             onContextMenu={e => { e.preventDefault(); openSidebarMenu(e.clientX, e.clientY, colActions); }}>
@@ -466,6 +468,7 @@ export function CollectionsSection(p: Props) {
                     </Box>
                     );
                 })}
+                </Stack>
             </Box>
 
             <DragOverlay dropAnimation={null}>
@@ -568,7 +571,7 @@ function FolderNameForm({name, onChange, onCancel, onSubmit, depth}: {
             if (name.trim()) onSubmit();
         }}>
             <Group gap={4} pr="xs" py={2} wrap="nowrap"
-                style={{paddingLeft: `${4 + depth * 16}px`}}>
+                style={{paddingLeft: `${10 + depth * 16}px`}}>
                 <TextInput
                     size="xs"
                     style={{flex: 1}}

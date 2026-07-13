@@ -1,5 +1,5 @@
 import {ActionIcon, Box, Group, Text} from '@mantine/core';
-import {IconChevronDown, IconChevronRight} from '@tabler/icons-react';
+import {IconChevronRight} from '@tabler/icons-react';
 import {main} from '../../../wailsjs/go/models';
 import {ConfirmDelete} from '../../components/ConfirmDelete';
 import {SectionLabel} from '../../components/SectionLabel';
@@ -36,7 +36,7 @@ function outcome(e: main.HistoryEntry) {
 
 export function HistorySection(p: Props) {
     return (
-        <Box mt="md">
+        <Box mt="lg">
             <Group justify="space-between" px="xs" mb={4}>
                 <SectionLabel>History</SectionLabel>
                 <Group gap={4}>
@@ -45,9 +45,7 @@ export function HistorySection(p: Props) {
                     <ActionIcon size="sm" variant="subtle" color="gray"
                         title={p.collapsed ? 'Show history' : 'Hide history'}
                         onClick={p.onToggle}>
-                        {p.collapsed
-                            ? <IconChevronRight size={18}/>
-                            : <IconChevronDown size={18}/>}
+                        <IconChevronRight size={18} className={p.collapsed ? 'chevron' : 'chevron open'}/>
                     </ActionIcon>
                 </Group>
             </Group>

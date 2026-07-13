@@ -44,7 +44,7 @@ export function MocksSection(p: Props) {
     }
 
     return (
-        <Box mt="md">
+        <Box mt="lg">
             <Group justify="space-between" px="xs" mb={4}>
                 <SectionLabel>Mock Servers</SectionLabel>
                 <ActionIcon size="sm" variant="subtle" color="gray" title="New mock server"
@@ -68,7 +68,7 @@ export function MocksSection(p: Props) {
                             contextActions={[{label: 'Delete', color: 'red', onClick: () => p.onDelete(m.id)}]}
                             leading={
                                 <UnstyledButton
-                                    pl={8} py={4}
+                                    py={4}
                                     aria-label={open ? 'Collapse routes' : 'Expand routes'}
                                     onClick={() => toggle(m.id)}
                                     style={{display: 'flex', alignItems: 'center'}}>
@@ -104,8 +104,9 @@ export function MocksSection(p: Props) {
                                         onConfirm={() => p.onDeleteRoute(m, r.id)}/>
                                 </span>}
                             />)}
+                        {/* hint indent 26 = route row indent (16) + row px (10): the route glyph rail */}
                         {open && (m.routes ?? []).length === 0 &&
-                            <Text size="xs" c="dark.2" px="xs" pl={28} py={2}>No routes</Text>}
+                            <Text size="xs" c="dark.2" pl={26} py={2}>No routes</Text>}
                     </Box>
                 );
             })}

@@ -183,12 +183,12 @@ export function Sidebar(p: Props) {
 
     return (
         <Box h="100%" style={{display: 'flex', flexDirection: 'column', overflow: 'hidden'}} onKeyDown={handleKeyDown}>
-            {/* Collapse toggle */}
-            <Box px="xs" pt="xs" pb={4} style={{display: 'flex', justifyContent: 'flex-end'}}>
+            {/* Collapse toggle — px lg = ScrollArea inset (xs) + row px (xs), the shared icon rail */}
+            <Box px="lg" pt="xs" pb={4} style={{display: 'flex', justifyContent: 'flex-end'}}>
                 <Tooltip label="Collapse sidebar" position="left" withArrow openDelay={400}>
                     <ActionIcon variant="subtle" color="gray" size="sm"
                         onClick={p.onToggleCollapse}>
-                        <IconLayoutSidebarLeftExpand size={16}/>
+                        <IconLayoutSidebarLeftExpand size={18}/>
                     </ActionIcon>
                 </Tooltip>
             </Box>
