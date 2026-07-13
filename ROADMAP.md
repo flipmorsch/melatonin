@@ -29,6 +29,12 @@ real use decides what gets built.
 - History detail view: clicking an entry shows a read-only record (sent request,
   resolved URL, full response) instead of hijacking the scratch editor; "Open in
   editor" does the old replay (done 2026-07-12)
+- Pre-request / post-response scripting: JavaScript snippets attached to Requests,
+  running in an embedded Goja runtime. Pre-request script can mutate the request
+  (headers, body, method, URL) before `{{var}}` substitution; post-response script
+  can extract values into session variables and mutate the displayed response.
+  Script API: `request`, `response`, `env.get`/`env.set`, `console.log`/`warn`/`error`,
+  `fetch(url)`, `atob`/`btoa`, `crypto.randomUUID()`, `sleep(ms)`. (in progress)
 - Friction captured in FRICTION.md as it happens; triaged here after ~a week of use
 - Done when: launched from the OS launcher daily for a week, friction log triaged
 
@@ -63,7 +69,6 @@ real use decides what gets built.
 
 ## Future (explicitly deferred from v1)
 
-- Pre-request / post-response scripting
 - Cookie jar UI (the client keeps a silent in-memory jar since v1.1; managing/viewing it is future work)
 - Save response body to file (dropped from the v1 send-defaults line — copy-to-clipboard covers it until a >5 MB body shows up)
 - GraphQL, gRPC, WebSocket, SSE support
