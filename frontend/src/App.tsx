@@ -1,5 +1,5 @@
-import {useEffect, useMemo, useState} from 'react';
-import {AppShell, Button, Group, NativeSelect, Text} from '@mantine/core';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {AppShell, Box, Button, Group, NativeSelect, Text} from '@mantine/core';
 import {main} from '../wailsjs/go/models';
 import {Brand} from './components/Brand';
 import {Sidebar} from './features/sidebar/Sidebar';
@@ -31,7 +31,11 @@ function App() {
     const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
     const [shellError, setShellError] = useState('');
     const [paletteOpen, setPaletteOpen] = useState(false);
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('sidebarCollapsed') === 'true');
+    const [sidebarWidth, setSidebarWidth] = useState(() => {
+        const saved = localStorage.getItem('sidebarWidth');
+        return saved ? Math.max(180, Math.min(500, Number(saved))) : 260;
+    });
 
     const environments = envs.envSet?.environments ?? [];
     const variables = Object.keys(
@@ -43,6 +47,34 @@ function App() {
         setShellError('');
         p.catch(e => setShellError(String(e)));
     };
+
+    // ── Sidebar resize ──
+    const sidebarWidthRef = useRef(sidebarWidth);
+    useEffect(() => { sidebarWidthRef.current = sidebarWidth; }, [sidebarWidth]);
+
+    const handleResizeStart = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        const navbar = (e.currentTarget as HTMLElement).closest('.mantine-AppShell-navbar') as HTMLElement | null;
+        if (navbar) navbar.style.transition = 'none';
+        const startX = e.clientX;
+        const startW = sidebarWidthRef.current;
+        const onMove = (ev: MouseEvent) => {
+            const w = Math.max(180, Math.min(500, startW + ev.clientX - startX));
+            setSidebarWidth(w);
+        };
+        const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            if (navbar) navbar.style.transition = '';
+            localStorage.setItem('sidebarWidth', String(sidebarWidthRef.current));
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    }, []);
 
     // Ctrl+K / Cmd+K opens the command palette
     useEffect(() => {
@@ -184,7 +216,7 @@ function App() {
     }
 
     return (
-        <AppShell header={{height: 52}} navbar={{width: sidebarCollapsed ? 48 : 260, breakpoint: 0}} padding="md">
+        <AppShell header={{height: 52}} navbar={{width: sidebarCollapsed ? 48 : sidebarWidth, breakpoint: 0}} padding="md">
             <AppShell.Header className="topbar" withBorder={false} px="md">
                 <Group justify="space-between" h="100%">
                     <Brand/>
@@ -209,62 +241,74 @@ function App() {
             </AppShell.Header>
 
             <AppShell.Navbar withBorder>
-                <Sidebar
-                    collapsed={sidebarCollapsed}
-                    onToggleCollapse={() => setSidebarCollapsed(c => !c)}
-                    collections={cols.collections}
-                    selectedReqId={view === 'request' ? selected?.req.id ?? null : null}
-                    onSelectRequest={selectRequest}
-                    onCreateCollection={name => run(cols.create(name))}
-                    onDeleteCollection={id => {
-                        if (selected?.colId === id) setSelected(null);
-                        run(cols.remove(id));
-                    }}
-                    onCreateFolder={(colId: string, parentId: string, name: string) =>
-                        cols.createFolder(colId, parentId, name)}
-                    onDeleteFolder={(colId: string, folderId: string) =>
-                        cols.removeFolder(colId, folderId)}
-                    onCountFolder={(colId: string, folderId: string) =>
-                        cols.countFolder(colId, folderId)}
-                    onAddRequest={(colId: string, parentFolderId?: string) =>
-                        run(addRequest(colId, parentFolderId))}
-                    onDeleteRequest={(colId, reqId) => {
-                        if (selected?.req.id === reqId) setSelected(null);
-                        run(cols.removeRequest(colId, reqId));
-                    }}
-                    onReorderRequest={(colId, reqId, newParentID, newPos) =>
-                        run(cols.reorderRequest(colId, reqId, newParentID, newPos))}
-                    onReorderFolder={(colId, folderId, newParentID, newPos) =>
-                        run(cols.reorderFolder(colId, folderId, newParentID, newPos))}
-                    mocks={mocks.mocks}
-                    running={mocks.running}
-                    selectedMockId={view === 'mock' ? selectedMockId : null}
-                    selectedRouteId={view === 'mock' ? selectedRouteId : null}
-                    onSelectMock={selectMock}
-                    onAddMock={() => run(addMock())}
-                    onDeleteMock={id => {
-                        if (selectedMockId === id) {
-                            setSelectedMockId('');
-                            setSelectedRouteId(null);
-                            setView('request');
-                        }
-                        run(mocks.remove(id));
-                    }}
-                    onSelectRoute={selectRoute}
-                    onAddRoute={m => run(addRoute(m))}
-                    onDeleteRoute={deleteRoute}
-                    history={hist.entries}
-                    selectedHistoryId={
-                        view === 'history' ? histDetail?.id ?? null
-                        : view === 'request' && !selected ? replay?.id ?? null : null}
-                    onSelectHistory={selectHistory}
-                    onClearHistory={() => {
-                        setReplay(null);
-                        setHistDetail(null);
-                        if (view === 'history') setView('request');
-                        run(hist.clear());
-                    }}
-                />
+                <Box style={{position: 'relative', height: '100%'}}>
+                    <Sidebar
+                        collapsed={sidebarCollapsed}
+                        onToggleCollapse={() => setSidebarCollapsed(c => { const n = !c; localStorage.setItem('sidebarCollapsed', String(n)); return n; })}
+                        collections={cols.collections}
+                        selectedReqId={view === 'request' ? selected?.req.id ?? null : null}
+                        onSelectRequest={selectRequest}
+                        onCreateCollection={name => run(cols.create(name))}
+                        onDeleteCollection={id => {
+                            if (selected?.colId === id) setSelected(null);
+                            run(cols.remove(id));
+                        }}
+                        onCreateFolder={(colId: string, parentId: string, name: string) =>
+                            cols.createFolder(colId, parentId, name)}
+                        onDeleteFolder={(colId: string, folderId: string) =>
+                            cols.removeFolder(colId, folderId)}
+                        onCountFolder={(colId: string, folderId: string) =>
+                            cols.countFolder(colId, folderId)}
+                        onAddRequest={(colId: string, parentFolderId?: string) =>
+                            run(addRequest(colId, parentFolderId))}
+                        onDeleteRequest={(colId, reqId) => {
+                            if (selected?.req.id === reqId) setSelected(null);
+                            run(cols.removeRequest(colId, reqId));
+                        }}
+                        onReorderRequest={(colId, reqId, newParentID, newPos) =>
+                            run(cols.reorderRequest(colId, reqId, newParentID, newPos))}
+                        onReorderFolder={(colId, folderId, newParentID, newPos) =>
+                            run(cols.reorderFolder(colId, folderId, newParentID, newPos))}
+                        mocks={mocks.mocks}
+                        running={mocks.running}
+                        selectedMockId={view === 'mock' ? selectedMockId : null}
+                        selectedRouteId={view === 'mock' ? selectedRouteId : null}
+                        onSelectMock={selectMock}
+                        onAddMock={() => run(addMock())}
+                        onDeleteMock={id => {
+                            if (selectedMockId === id) {
+                                setSelectedMockId('');
+                                setSelectedRouteId(null);
+                                setView('request');
+                            }
+                            run(mocks.remove(id));
+                        }}
+                        onSelectRoute={selectRoute}
+                        onAddRoute={m => run(addRoute(m))}
+                        onDeleteRoute={deleteRoute}
+                        history={hist.entries}
+                        selectedHistoryId={
+                            view === 'history' ? histDetail?.id ?? null
+                            : view === 'request' && !selected ? replay?.id ?? null : null}
+                        onSelectHistory={selectHistory}
+                        onClearHistory={() => {
+                            setReplay(null);
+                            setHistDetail(null);
+                            if (view === 'history') setView('request');
+                            run(hist.clear());
+                        }}
+                    />
+                    {!sidebarCollapsed && (
+                        <Box
+                            onMouseDown={handleResizeStart}
+                            style={{
+                                position: 'absolute', right: -2, top: 0, bottom: 0,
+                                width: 5, cursor: 'col-resize', zIndex: 10,
+                                background: 'transparent',
+                            }}
+                        />
+                    )}
+                </Box>
             </AppShell.Navbar>
 
             <AppShell.Main style={{display: 'flex', flexDirection: 'column', height: '100vh'}}>
