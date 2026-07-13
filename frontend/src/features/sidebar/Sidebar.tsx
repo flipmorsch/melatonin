@@ -27,8 +27,8 @@ interface Props {
     onCountFolder: (colId: string, folderId: string) => Promise<number>;
     onAddRequest: (colId: string, parentFolderId?: string) => void;
     onDeleteRequest: (colId: string, reqId: string) => void;
-    onReorderRequest: (colId: string, reqId: string, newPosition: number) => void;
-    onReorderFolder: (colId: string, folderId: string, newPosition: number) => void;
+    onReorderRequest: (colId: string, reqId: string, newParentID: string, newPosition: number) => void;
+    onReorderFolder: (colId: string, folderId: string, newParentID: string, newPosition: number) => void;
 
     mocks: main.MockServer[];
     running: Record<string, number>;

@@ -344,7 +344,7 @@ func TestMoveRequest(t *testing.T) {
 	r3, _ := a.SaveRequest(col.ID, SavedRequest{Name: "C", Method: "GET", URL: "http://x"}, "")
 
 	// Move r1 (currently position 0) to position 1.
-	if err := a.MoveRequest(col.ID, r1.ID, 1); err != nil {
+	if err := a.MoveRequest(col.ID, r1.ID, "", 1); err != nil {
 		t.Fatal(err)
 	}
 	cols, _ := a.ListCollections()
@@ -354,7 +354,7 @@ func TestMoveRequest(t *testing.T) {
 	}
 
 	// Move r3 (currently position 2) to position 0.
-	if err := a.MoveRequest(col.ID, r3.ID, 0); err != nil {
+	if err := a.MoveRequest(col.ID, r3.ID, "", 0); err != nil {
 		t.Fatal(err)
 	}
 	cols, _ = a.ListCollections()
@@ -379,7 +379,7 @@ func TestMoveRequestRoundTrip(t *testing.T) {
 	_, _ = a.SaveRequest(col.ID, SavedRequest{Name: "B", Method: "GET", URL: "http://x"}, "")
 
 	// Move and re-read from disk to verify persistence.
-	a.MoveRequest(col.ID, r1.ID, 1)
+	a.MoveRequest(col.ID, r1.ID, "", 1)
 
 	// Re-read via ListCollections (fresh from disk).
 	cols, _ := a.ListCollections()
@@ -396,10 +396,10 @@ func TestMoveRequestErrors(t *testing.T) {
 	a := testApp(t)
 	col, _ := a.CreateCollection("Test")
 
-	if err := a.MoveRequest("nope", "r1", 0); err == nil {
+	if err := a.MoveRequest("nope", "r1", "", 0); err == nil {
 		t.Fatal("expected error for unknown collection")
 	}
-	if err := a.MoveRequest(col.ID, "ghost", 0); err == nil {
+	if err := a.MoveRequest(col.ID, "ghost", "", 0); err == nil {
 		t.Fatal("expected error for unknown request")
 	}
 }
@@ -415,7 +415,7 @@ func TestMoveRequestInFolder(t *testing.T) {
 	r3, _ := a.SaveRequest(col.ID, SavedRequest{Name: "Z", Method: "GET", URL: "http://x"}, f.ID)
 
 	// Move last to first.
-	if err := a.MoveRequest(col.ID, r3.ID, 0); err != nil {
+	if err := a.MoveRequest(col.ID, r3.ID, "", 0); err != nil {
 		t.Fatal(err)
 	}
 	cols, _ := a.ListCollections()
@@ -434,7 +434,7 @@ func TestMoveFolder(t *testing.T) {
 	f3, _ := a.CreateFolder(col.ID, "", "gamma")
 
 	// Move f3 (position 2) to position 0.
-	if err := a.MoveFolder(col.ID, f3.ID, 0); err != nil {
+	if err := a.MoveFolder(col.ID, f3.ID, "", 0); err != nil {
 		t.Fatal(err)
 	}
 	cols, _ := a.ListCollections()
@@ -453,10 +453,10 @@ func TestMoveFolderErrors(t *testing.T) {
 	a := testApp(t)
 	col, _ := a.CreateCollection("Test")
 
-	if err := a.MoveFolder("nope", "f1", 0); err == nil {
+	if err := a.MoveFolder("nope", "f1", "", 0); err == nil {
 		t.Fatal("expected error for unknown collection")
 	}
-	if err := a.MoveFolder(col.ID, "ghost", 0); err == nil {
+	if err := a.MoveFolder(col.ID, "ghost", "", 0); err == nil {
 		t.Fatal("expected error for unknown folder")
 	}
 }
@@ -470,7 +470,7 @@ func TestMoveFolderInFolder(t *testing.T) {
 	child2, _ := a.CreateFolder(col.ID, parent.ID, "two")
 
 	// Move child2 to position 0.
-	if err := a.MoveFolder(col.ID, child2.ID, 0); err != nil {
+	if err := a.MoveFolder(col.ID, child2.ID, "", 0); err != nil {
 		t.Fatal(err)
 	}
 	cols, _ := a.ListCollections()
@@ -493,6 +493,90 @@ func TestNewRequestPosition(t *testing.T) {
 		if req.Position != i {
 			t.Fatalf("new request %q: position=%d, want=%d", req.Name, req.Position, i)
 		}
+	}
+}
+
+func TestMoveRequestReparent(t *testing.T) {
+	a := testApp(t)
+	col, _ := a.CreateCollection("Test")
+	root, _ := a.SaveRequest(col.ID, SavedRequest{Name: "Root", Method: "GET", URL: "http://x"}, "")
+	dest, _ := a.CreateFolder(col.ID, "", "dest")
+
+	// Move root-level request into the folder at position 0.
+	if err := a.MoveRequest(col.ID, root.ID, dest.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	cols, _ := a.ListCollections()
+	if len(cols[0].Requests) != 0 {
+		t.Fatal("root should be empty after reparent")
+	}
+	if len(cols[0].Folders[0].Requests) != 1 {
+		t.Fatal("folder should have one request after reparent")
+	}
+	if cols[0].Folders[0].Requests[0].Name != "Root" {
+		t.Fatalf("expected Root in folder, got %s", cols[0].Folders[0].Requests[0].Name)
+	}
+	if cols[0].Folders[0].Requests[0].Position != 0 {
+		t.Fatalf("position should be 0, got %d", cols[0].Folders[0].Requests[0].Position)
+	}
+}
+
+func TestMoveRequestReparentErrors(t *testing.T) {
+	a := testApp(t)
+	col, _ := a.CreateCollection("Test")
+	r1, _ := a.SaveRequest(col.ID, SavedRequest{Name: "A", Method: "GET", URL: "http://x"}, "")
+
+	// Unknown target folder.
+	if err := a.MoveRequest(col.ID, r1.ID, "ghost", 0); err == nil {
+		t.Fatal("expected error for unknown parent folder")
+	}
+}
+
+func TestMoveFolderReparent(t *testing.T) {
+	a := testApp(t)
+	col, _ := a.CreateCollection("Test")
+	parent, _ := a.CreateFolder(col.ID, "", "parent")
+	child, _ := a.CreateFolder(col.ID, parent.ID, "child")
+	sibling, _ := a.CreateFolder(col.ID, "", "sibling")
+
+	// Move child folder into sibling.
+	if err := a.MoveFolder(col.ID, child.ID, sibling.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	cols, _ := a.ListCollections()
+	parentFolder := cols[0].Folders[0]
+	siblingFolder := cols[0].Folders[1]
+	if len(parentFolder.Folders) != 0 {
+		t.Fatal("parent should have no children after reparent")
+	}
+	if len(siblingFolder.Folders) != 1 {
+		t.Fatal("sibling should have one child after reparent")
+	}
+	if siblingFolder.Folders[0].Name != "child" {
+		t.Fatalf("expected child in sibling, got %s", siblingFolder.Folders[0].Name)
+	}
+}
+
+func TestMoveFolderSelfPrevention(t *testing.T) {
+	a := testApp(t)
+	col, _ := a.CreateCollection("Test")
+	f, _ := a.CreateFolder(col.ID, "", "f")
+
+	// Cannot move a folder into itself.
+	if err := a.MoveFolder(col.ID, f.ID, f.ID, 0); err == nil {
+		t.Fatal("expected error for self-reparent")
+	}
+}
+
+func TestMoveFolderDescendantPrevention(t *testing.T) {
+	a := testApp(t)
+	col, _ := a.CreateCollection("Test")
+	parent, _ := a.CreateFolder(col.ID, "", "parent")
+	child, _ := a.CreateFolder(col.ID, parent.ID, "child")
+
+	// Cannot move parent into its own child.
+	if err := a.MoveFolder(col.ID, parent.ID, child.ID, 0); err == nil {
+		t.Fatal("expected error for moving parent into descendant")
 	}
 }
 

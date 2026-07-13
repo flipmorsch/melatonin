@@ -47,13 +47,13 @@ export function useCollections() {
         return await CountFolderDescendants(colId, folderId);
     };
 
-    const reorderRequest = async (colId: string, reqId: string, newPosition: number) => {
-        await MoveRequest(colId, reqId, newPosition);
+    const reorderRequest = async (colId: string, reqId: string, newParentID: string, newPosition: number) => {
+        await MoveRequest(colId, reqId, newParentID, newPosition);
         await refresh();
     };
 
-    const reorderFolder = async (colId: string, folderId: string, newPosition: number) => {
-        await MoveFolder(colId, folderId, newPosition);
+    const reorderFolder = async (colId: string, folderId: string, newParentID: string, newPosition: number) => {
+        await MoveFolder(colId, folderId, newParentID, newPosition);
         await refresh();
     };
 

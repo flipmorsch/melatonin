@@ -1,4 +1,4 @@
-import {useMemo, useState, ReactNode, useCallback} from 'react';
+import {useMemo, useState, ReactNode, useRef} from 'react';
 import {ActionIcon, Box, Group, Text, TextInput, UnstyledButton} from '@mantine/core';
 import {IconChevronDown, IconChevronRight, IconFileDescription, IconFolderPlus, IconGripVertical} from '@tabler/icons-react';
 import {
@@ -8,7 +8,8 @@ import {
     DragStartEvent,
     KeyboardSensor,
     PointerSensor,
-    closestCenter,
+    closestCorners,
+    useDroppable,
     useSensor,
     useSensors,
 } from '@dnd-kit/core';
@@ -33,8 +34,8 @@ interface Props {
     onCountFolder: (colId: string, folderId: string) => Promise<number>;
     onAddRequest: (colId: string, parentFolderId?: string) => void;
     onDeleteRequest: (colId: string, reqId: string) => void;
-    onReorderRequest: (colId: string, reqId: string, newPosition: number) => void;
-    onReorderFolder: (colId: string, folderId: string, newPosition: number) => void;
+    onReorderRequest: (colId: string, reqId: string, newParentID: string, newPosition: number) => void;
+    onReorderFolder: (colId: string, folderId: string, newParentID: string, newPosition: number) => void;
 }
 
 // ── Sortable folder wrapper ──────────────────────────────────────────
@@ -64,21 +65,32 @@ function SortableFolderRow({folder, colId, depth, collapsed, onToggle, selectedR
     const {
         attributes,
         listeners,
-        setNodeRef,
+        setNodeRef: setSortableRef,
         setActivatorNodeRef,
         transform,
         transition,
         isDragging,
     } = useSortable({id: folder.id});
 
+    const {setNodeRef: setDroppableRef, isOver} = useDroppable({id: `droppable:${colId}:${folder.id}`});
+
+    // Combine both refs so the same element is sortable AND droppable.
+    const setNodeRef = useRef((node: HTMLElement | null) => {
+        setSortableRef(node);
+        setDroppableRef(node);
+    }).current;
+
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.3 : undefined,
+        ...(isOver ? {
+            boxShadow: 'inset 0 0 0 2px var(--mantine-color-violet-4)',
+            borderRadius: 'var(--mantine-radius-sm)',
+        } : {}),
     };
 
     const isCollapsed = collapsed;
-
     return (
         <Box ref={setNodeRef} style={style}>
             <Group gap={2} px="xs" className="hover-row" wrap="nowrap"
@@ -178,30 +190,37 @@ export function CollectionsSection(p: Props) {
         const {active, over} = event;
         if (!over || active.id === over.id) return;
 
-        const activeStr = active.id as string;
-        const overStr = over.id as string;
+        const overId = over.id as string;
 
-        // Determine which list was dragged and compute new position.
-        // active.data.current?.sortable tells us the SortableContext.
+        // Dropping onto a folder → reparent into that folder.
+        if (overId.startsWith('droppable:')) {
+            const [, colId, folderId] = overId.split(':');
+            const activeStr = active.id as string;
+            // Determine if it's a request or folder.
+            const col = p.collections.find(c => c.id === colId);
+            if (!col) return;
+            if (isRequest(col, activeStr)) {
+                p.onReorderRequest(colId, activeStr, folderId, 0);
+            } else {
+                p.onReorderFolder(colId, activeStr, folderId, 0);
+            }
+            return;
+        }
+
+        // Normal reorder within parent.
         const container = active.data.current?.sortable?.containerId;
         if (!container) return;
 
-        // The container format is: "reqs:{parentId}" or "folders:{parentId}"
         const [kind, parentId] = container.split(':');
-        // Find the collection owning this parent (the active item belongs to a collection).
-        // The parentId identifies the folder (or "root" for collection root).
-        // We need to find which collection contains this item.
         const col = p.collections.find(c => {
             if (parentId === 'root') {
-                if (kind === 'reqs') return c.requests.some(r => r.id === activeStr);
-                return c.folders.some(f => f.id === activeStr);
+                if (kind === 'reqs') return c.requests.some(r => r.id === active.id);
+                return c.folders.some(f => f.id === active.id);
             }
-            // Walk the tree.
-            return containsItem(c, parentId, activeStr, kind as 'reqs' | 'folders');
+            return containsItem(c, parentId, active.id as string, kind as 'reqs' | 'folders');
         });
         if (!col) return;
 
-        // Find the list of IDs to compute the new position.
         let ids: string[];
         if (kind === 'reqs') {
             if (parentId === 'root') {
@@ -221,13 +240,14 @@ export function CollectionsSection(p: Props) {
             }
         }
 
-        const newPos = ids.indexOf(overStr);
+        const newPos = ids.indexOf(overId);
         if (newPos < 0) return;
 
+        const activeStr = active.id as string;
         if (kind === 'reqs') {
-            p.onReorderRequest(col.id, activeStr, newPos);
+            p.onReorderRequest(col.id, activeStr, '', newPos);
         } else {
-            p.onReorderFolder(col.id, activeStr, newPos);
+            p.onReorderFolder(col.id, activeStr, '', newPos);
         }
     }
 
@@ -321,7 +341,7 @@ export function CollectionsSection(p: Props) {
     return (
         <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={closestCorners}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
             onDragCancel={() => setActiveId(null)}
@@ -527,6 +547,18 @@ function containsItem(col: main.Collection, parentId: string, itemId: string, ki
     if (!folder) return false;
     if (kind === 'reqs') return folder.requests.some(r => r.id === itemId);
     return folder.folders.some(f => f.id === itemId);
+}
+
+function isRequest(col: main.Collection, id: string): boolean {
+    if (col.requests.some(r => r.id === id)) return true;
+    function check(folders: main.FolderNode[]): boolean {
+        for (const f of folders) {
+            if (f.requests.some(r => r.id === id)) return true;
+            if (check(f.folders)) return true;
+        }
+        return false;
+    }
+    return check(col.folders);
 }
 
 /** Inline form for naming a new folder. */

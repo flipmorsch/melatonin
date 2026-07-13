@@ -535,24 +535,39 @@ func deleteFolderFromSlice(parent *FolderNode, id string) bool {
 	return false
 }
 
-// MoveRequest changes a request's position within its current parent.
-// newPosition is the target 0-based index; siblings are shifted and renumbered.
-func (a *App) MoveRequest(collectionID, requestID string, newPosition int) error {
+// MoveRequest changes a request's position and optionally its parent.
+// newParentID == "" keeps the current parent; the position is changed within it.
+// newParentID != "" extracts the request and inserts it into that folder.
+func (a *App) MoveRequest(collectionID, requestID, newParentID string, newPosition int) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	c, err := a.readCollection(collectionID)
 	if err != nil {
 		return err
 	}
-	if moveRequestInSlice(&c.Requests, requestID, newPosition) {
-		return a.writeCollection(c)
-	}
-	for i := range c.Folders {
-		if moveRequestInFolder(&c.Folders[i], requestID, newPosition) {
+	if newParentID == "" {
+		// Within-parent reorder — keep existing logic.
+		if moveRequestInSlice(&c.Requests, requestID, newPosition) {
 			return a.writeCollection(c)
 		}
+		for i := range c.Folders {
+			if moveRequestInFolder(&c.Folders[i], requestID, newPosition) {
+				return a.writeCollection(c)
+			}
+		}
+		return fmt.Errorf("request %s not found in collection %s", requestID, collectionID)
 	}
-	return fmt.Errorf("request %s not found in collection %s", requestID, collectionID)
+	// Reparent: extract from current location, insert into new parent.
+	req, ok := extractRequestFromTree(c, requestID)
+	if !ok {
+		return fmt.Errorf("request %s not found in collection %s", requestID, collectionID)
+	}
+	target := findFolderNode(c, newParentID)
+	if target == nil {
+		return fmt.Errorf("parent folder %s not found", newParentID)
+	}
+	insertRequestAt(&target.Requests, req, newPosition)
+	return a.writeCollection(c)
 }
 
 func moveRequestInSlice(reqs *[]SavedRequest, id string, pos int) bool {
@@ -593,26 +608,6 @@ func moveRequestInFolder(f *FolderNode, id string, pos int) bool {
 	return false
 }
 
-// MoveFolder changes a folder's position within its current parent.
-// newPosition is the target 0-based index; siblings are shifted and renumbered.
-func (a *App) MoveFolder(collectionID, folderID string, newPosition int) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	c, err := a.readCollection(collectionID)
-	if err != nil {
-		return err
-	}
-	if moveFolderInSlice(&c.Folders, folderID, newPosition) {
-		return a.writeCollection(c)
-	}
-	for i := range c.Folders {
-		if moveFolderInFolder(&c.Folders[i], folderID, newPosition) {
-			return a.writeCollection(c)
-		}
-	}
-	return fmt.Errorf("folder %s not found in collection %s", folderID, collectionID)
-}
-
 func moveFolderInSlice(folders *[]FolderNode, id string, pos int) bool {
 	idx := -1
 	for i, f := range *folders {
@@ -645,6 +640,172 @@ func moveFolderInFolder(f *FolderNode, id string, pos int) bool {
 	}
 	for i := range f.Folders {
 		if moveFolderInFolder(&f.Folders[i], id, pos) {
+			return true
+		}
+	}
+	return false
+}
+
+func extractRequestFromTree(c *Collection, id string) (SavedRequest, bool) {
+	for i, r := range c.Requests {
+		if r.ID == id {
+			c.Requests = append(c.Requests[:i], c.Requests[i+1:]...)
+			return r, true
+		}
+	}
+	for i := range c.Folders {
+		if r, ok := extractRequestFromFolder(&c.Folders[i], id); ok {
+			return r, true
+		}
+	}
+	return SavedRequest{}, false
+}
+
+func extractRequestFromFolder(f *FolderNode, id string) (SavedRequest, bool) {
+	for i, r := range f.Requests {
+		if r.ID == id {
+			f.Requests = append(f.Requests[:i], f.Requests[i+1:]...)
+			return r, true
+		}
+	}
+	for i := range f.Folders {
+		if r, ok := extractRequestFromFolder(&f.Folders[i], id); ok {
+			return r, true
+		}
+	}
+	return SavedRequest{}, false
+}
+
+func insertRequestAt(reqs *[]SavedRequest, req SavedRequest, pos int) {
+	if pos < 0 {
+		pos = 0
+	}
+	if pos > len(*reqs) {
+		pos = len(*reqs)
+	}
+	*reqs = append((*reqs)[:pos], append([]SavedRequest{req}, (*reqs)[pos:]...)...)
+	for i := range *reqs {
+		(*reqs)[i].Position = i
+	}
+}
+
+// MoveFolder changes a folder's position and optionally its parent.
+func (a *App) MoveFolder(collectionID, folderID, newParentID string, newPosition int) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	c, err := a.readCollection(collectionID)
+	if err != nil {
+		return err
+	}
+	if newParentID == "" {
+		// Within-parent reorder.
+		if moveFolderInSlice(&c.Folders, folderID, newPosition) {
+			return a.writeCollection(c)
+		}
+		for i := range c.Folders {
+			if moveFolderInFolder(&c.Folders[i], folderID, newPosition) {
+				return a.writeCollection(c)
+			}
+		}
+		return fmt.Errorf("folder %s not found in collection %s", folderID, collectionID)
+	}
+	// Reparent.
+	if isOrContains(c, folderID, newParentID) {
+		return fmt.Errorf("cannot move a folder into itself or a descendant")
+	}
+	f, ok := extractFolderFromTree(c, folderID)
+	if !ok {
+		return fmt.Errorf("folder %s not found in collection %s", folderID, collectionID)
+	}
+	target := findFolderNode(c, newParentID)
+	if target == nil {
+		return fmt.Errorf("parent folder %s not found", newParentID)
+	}
+	insertFolderAt(&target.Folders, f, newPosition)
+	return a.writeCollection(c)
+}
+
+func extractFolderFromTree(c *Collection, id string) (FolderNode, bool) {
+	for i, f := range c.Folders {
+		if f.ID == id {
+			c.Folders = append(c.Folders[:i], c.Folders[i+1:]...)
+			return f, true
+		}
+		if f2, ok := extractFolderFromFolderNode(&c.Folders[i], id); ok {
+			return f2, true
+		}
+	}
+	return FolderNode{}, false
+}
+
+func extractFolderFromFolderNode(f *FolderNode, id string) (FolderNode, bool) {
+	for i, child := range f.Folders {
+		if child.ID == id {
+			f.Folders = append(f.Folders[:i], f.Folders[i+1:]...)
+			return child, true
+		}
+		if f2, ok := extractFolderFromFolderNode(&f.Folders[i], id); ok {
+			return f2, true
+		}
+	}
+	return FolderNode{}, false
+}
+
+func insertFolderAt(folders *[]FolderNode, f FolderNode, pos int) {
+	if pos < 0 {
+		pos = 0
+	}
+	if pos > len(*folders) {
+		pos = len(*folders)
+	}
+	*folders = append((*folders)[:pos], append([]FolderNode{f}, (*folders)[pos:]...)...)
+	for i := range *folders {
+		(*folders)[i].Position = i
+	}
+}
+
+func findFolderNode(c *Collection, id string) *FolderNode {
+	for i := range c.Folders {
+		if f := findFolderNodeRec(&c.Folders[i], id); f != nil {
+			return f
+		}
+	}
+	return nil
+}
+
+func findFolderNodeRec(f *FolderNode, id string) *FolderNode {
+	if f.ID == id {
+		return f
+	}
+	for i := range f.Folders {
+		if found := findFolderNodeRec(&f.Folders[i], id); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+// isOrContains returns true if ancestorID is the same as childID or contains it.
+func isOrContains(c *Collection, ancestorID, childID string) bool {
+	if childID == "" {
+		return false
+	}
+	if ancestorID == childID {
+		return true
+	}
+	f := findFolderNode(c, childID)
+	if f == nil {
+		return false
+	}
+	return folderContains(f, ancestorID)
+}
+
+func folderContains(f *FolderNode, id string) bool {
+	if f.ID == id {
+		return true
+	}
+	for i := range f.Folders {
+		if folderContains(&f.Folders[i], id) {
 			return true
 		}
 	}
