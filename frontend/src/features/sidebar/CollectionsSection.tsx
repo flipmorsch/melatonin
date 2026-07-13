@@ -81,8 +81,9 @@ function SortableFolderRow({folder, colId, depth, collapsed, onToggle, selectedR
 
     return (
         <Box ref={setNodeRef} style={style}>
-            <Group gap={2} px="xs" className="hover-row" wrap="nowrap"
-                style={{paddingLeft: `${8 + depth * 16}px`}}>
+            {/* pr not px: Mantine style props override the style prop, so px would kill the depth indent */}
+            <Group gap={2} pr="xs" className="hover-row" wrap="nowrap"
+                style={{paddingLeft: `${4 + depth * 16}px`}}>
                 <Box
                     ref={setActivatorNodeRef}
                     {...attributes}
@@ -131,17 +132,10 @@ function SortableFolderRow({folder, colId, depth, collapsed, onToggle, selectedR
                     }}
                     depth={depth + 1}/>}
 
-            {!isCollapsed && (folder.requests.length > 0 || folder.folders.length > 0) &&
-                <Box style={{
-                    borderLeft: '1px solid var(--mantine-color-dark-4)',
-                    marginLeft: `${16 + depth * 16}px`,
-                    paddingLeft: 8,
-                }}>
-                    {requestRows}
-                    {subfolderRows}
-                </Box>}
+            {requestRows}
+            {subfolderRows}
             {!isCollapsed && folder.requests.length === 0 && folder.folders.length === 0 &&
-                <Text size="xs" c="dark.3" style={{paddingLeft: `${24 + depth * 16}px`}} py={4}>
+                <Text size="xs" c="dark.3" style={{paddingLeft: `${20 + depth * 16}px`}} py={4}>
                     Empty folder
                 </Text>}
         </Box>
@@ -275,10 +269,10 @@ export function CollectionsSection(p: Props) {
                             strategy={verticalListSortingStrategy}
                         >
                             {folder.requests.map(req =>
-                                <Box key={req.id} className="tree-row">
+                                <Box key={req.id}>
                                     <SortableSidebarRow
                                         id={req.id}
-                                        depth={0}
+                                        depth={depth + 1}
                                         selected={p.selectedReqId === req.id}
                                         onClick={() => p.onSelect(colId, req)}
                                         onDelete={() => p.onDeleteRequest(colId, req.id)}
@@ -544,8 +538,8 @@ function FolderNameForm({name, onChange, onCancel, onSubmit, depth}: {
             e.preventDefault();
             if (name.trim()) onSubmit();
         }}>
-            <Group gap={4} px="xs" py={2} wrap="nowrap"
-                style={{paddingLeft: `${8 + (depth + 1) * 16}px`}}>
+            <Group gap={4} pr="xs" py={2} wrap="nowrap"
+                style={{paddingLeft: `${4 + depth * 16}px`}}>
                 <TextInput
                     size="xs"
                     style={{flex: 1}}
