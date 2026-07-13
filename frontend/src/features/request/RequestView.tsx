@@ -1,7 +1,7 @@
 import {ReactNode, useEffect, useRef, useState} from 'react';
 import {
     Accordion, ActionIcon, Badge, Button, Checkbox, Group,
-    NativeSelect, NumberInput, PasswordInput, Stack, Text, TextInput,
+    NativeSelect, NumberInput, PasswordInput, Stack, Tabs, Text, TextInput,
 } from '@mantine/core';
 import {SendRequest} from '../../../wailsjs/go/main/App';
 import {main} from '../../../wailsjs/go/models';
@@ -82,12 +82,10 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
         setSkipTls(r.options?.skipTlsVerify ?? false);
         setPreScript(r.preRequestScript ?? '');
         setPostScript(r.postResponseScript ?? '');
-        const hasScript = (r.preRequestScript ?? '') || (r.postResponseScript ?? '');
         setOpen([
             ...(r.params?.length ? ['params'] : []),
             ...(r.headers?.length || r.auth?.type ? ['headers'] : []),
             ...(r.body ? ['body'] : []),
-            ...(hasScript ? ['scripts'] : []),
             ...(r.options?.timeoutSec || r.options?.noFollowRedirects || r.options?.skipTlsVerify
                 ? ['options'] : []),
         ]);
@@ -275,122 +273,12 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                 </Group>
             </form>
 
-            <Accordion multiple value={open} onChange={setOpen} variant="separated"
-                styles={{label: {paddingTop: 8, paddingBottom: 8}}}>
-                <Accordion.Item value="params">
-                    {sectionControl('Query Params', rowsToKV(params).length, undefined, addIcon('params'))}
-                    <Accordion.Panel>
-                        <KVEditor
-                            rows={params} onChange={setParams}
-                            keyPlaceholder="page" valuePlaceholder="2 or {{term}}"
-                        />
-                    </Accordion.Panel>
-                </Accordion.Item>
-
-                <Accordion.Item value="headers">
-                    {sectionControl('Headers', rowsToKV(headers).length,
-                        authType && <Badge size="xs" variant="light">auth</Badge>,
-                        addIcon('headers'))}
-                    <Accordion.Panel>
-                        <Stack gap="xs">
-                            <Group gap="xs" wrap="nowrap">
-                                <NativeSelect
-                                    w={140}
-                                    size="xs"
-                                    value={authType}
-                                    onChange={e => setAuthType(e.target.value)}
-                                    data={[
-                                        {value: '', label: 'No auth'},
-                                        {value: 'bearer', label: 'Bearer token'},
-                                        {value: 'basic', label: 'Basic auth'},
-                                    ]}
-                                />
-                                {authType === 'bearer' &&
-                                    <TextInput
-                                        style={{flex: 1}} size="xs" className="mono-input"
-                                        value={authToken}
-                                        onChange={e => setAuthToken(e.target.value)}
-                                        placeholder="Token (or {{token}})"
-                                    />}
-                                {authType === 'basic' && <>
-                                    <TextInput
-                                        style={{flex: 1}} size="xs" className="mono-input"
-                                        value={authUser}
-                                        onChange={e => setAuthUser(e.target.value)}
-                                        placeholder="Username"
-                                    />
-                                    <PasswordInput
-                                        style={{flex: 1}} size="xs" className="mono-input"
-                                        value={authPass}
-                                        onChange={e => setAuthPass(e.target.value)}
-                                        placeholder="Password"
-                                    />
-                                </>}
-                            </Group>
-                            <KVEditor
-                                rows={headers} onChange={setHeaders}
-                                keyPlaceholder="X-Request-Id" valuePlaceholder="abc"
-                                deadTitle={row =>
-                                    authType && row.key.trim().toLowerCase() === 'authorization'
-                                        ? 'Overridden by the auth helper' : undefined}
-                            />
-                        </Stack>
-                    </Accordion.Panel>
-                </Accordion.Item>
-
-                {hasBody &&
-                    <Accordion.Item value="body">
-                        {sectionControl('Body', 0,
-                            body && <Badge size="xs" variant="light" color="gray" tt="none">{body.length} chars</Badge>,
-                            <Button size="compact-xs" variant="subtle" color="gray" mx="xs"
-                                disabled={!looksJson(body)}
-                                title="Reformat JSON with 2-space indent"
-                                onClick={formatBody}>Format</Button>)}
-                        <Accordion.Panel>
-                            <CodeEditor
-                                key={selected?.req.id ?? 'scratch'}
-                                value={body}
-                                onChange={setBody}
-                                json={looksJson(body)}
-                                variables={variables}
-                                placeholder="Request body"
-                            />
-                        </Accordion.Panel>
-                    </Accordion.Item>}
-
-                <Accordion.Item value="options">
-                    {sectionControl('Options', optionsCount)}
-                    <Accordion.Panel>
-                        <Group gap="lg" align="center">
-                            <NumberInput
-                                w={150} size="xs" className="mono-input"
-                                min={0} max={600} allowDecimal={false}
-                                value={timeoutSec || ''}
-                                onChange={setTimeoutSec}
-                                placeholder="30"
-                                label="Timeout (s)"
-                                styles={{root: {display: 'flex', alignItems: 'center', gap: 8}}}
-                            />
-                            <Checkbox
-                                size="xs"
-                                label="Don't follow redirects"
-                                checked={noRedirects}
-                                onChange={e => setNoRedirects(e.currentTarget.checked)}
-                            />
-                            <Checkbox
-                                size="xs"
-                                label="Skip TLS verify"
-                                checked={skipTls}
-                                onChange={e => setSkipTls(e.currentTarget.checked)}
-                            />
-                        </Group>
-                    </Accordion.Panel>
-                </Accordion.Item>
-
-                <Accordion.Item value="scripts">
-                    {sectionControl('Scripts',
-                        (preScript ? 1 : 0) + (postScript ? 1 : 0),
-                        <>
+            <Tabs defaultValue="request" style={{flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column'}}>
+                <Tabs.List>
+                    <Tabs.Tab value="request">Request</Tabs.Tab>
+                    <Tabs.Tab value="scripts" ml="auto">
+                        <Group gap={6} wrap="nowrap">
+                            Scripts
                             {preScript && postScript
                                 ? <Badge size="xs" variant="dot" color="violet">pre+post</Badge>
                                 : preScript
@@ -398,47 +286,165 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                                     : postScript
                                         ? <Badge size="xs" variant="dot" color="violet">post</Badge>
                                         : null}
-                        </>
-                    )}
-                    <Accordion.Panel>
-                        {!preScript && !postScript && (
-                            <Text size="xs" c="dark.2" pb="xs">
-                                Scripts run in an embedded JavaScript runtime.
-                                Pre-request: mutate <Text component="code" size="xs" fw={600} c="dark.1">request</Text> before sending.
-                                Post-response: read <Text component="code" size="xs" fw={600} c="dark.1">response</Text>, call <Text component="code" size="xs" fw={600} c="dark.1">env.set()</Text>.
-                            </Text>
-                        )}
+                        </Group>
+                    </Tabs.Tab>
+                </Tabs.List>
+
+                <Tabs.Panel value="request" style={{flex: 1, minHeight: 0, overflow: 'auto'}} pt="sm">
+                    <Accordion multiple value={open} onChange={setOpen} variant="separated"
+                        styles={{label: {paddingTop: 8, paddingBottom: 8}}}>
+                        <Accordion.Item value="params">
+                            {sectionControl('Query Params', rowsToKV(params).length, undefined, addIcon('params'))}
+                            <Accordion.Panel>
+                                <KVEditor
+                                    rows={params} onChange={setParams}
+                                    keyPlaceholder="page" valuePlaceholder="2 or {{term}}"
+                                />
+                            </Accordion.Panel>
+                        </Accordion.Item>
+
+                        <Accordion.Item value="headers">
+                            {sectionControl('Headers', rowsToKV(headers).length,
+                                authType && <Badge size="xs" variant="light">auth</Badge>,
+                                addIcon('headers'))}
+                            <Accordion.Panel>
+                                <Stack gap="xs">
+                                    <Group gap="xs" wrap="nowrap">
+                                        <NativeSelect
+                                            w={140}
+                                            size="xs"
+                                            value={authType}
+                                            onChange={e => setAuthType(e.target.value)}
+                                            data={[
+                                                {value: '', label: 'No auth'},
+                                                {value: 'bearer', label: 'Bearer token'},
+                                                {value: 'basic', label: 'Basic auth'},
+                                            ]}
+                                        />
+                                        {authType === 'bearer' &&
+                                            <TextInput
+                                                style={{flex: 1}} size="xs" className="mono-input"
+                                                value={authToken}
+                                                onChange={e => setAuthToken(e.target.value)}
+                                                placeholder="Token (or {{token}})"
+                                            />}
+                                        {authType === 'basic' && <>
+                                            <TextInput
+                                                style={{flex: 1}} size="xs" className="mono-input"
+                                                value={authUser}
+                                                onChange={e => setAuthUser(e.target.value)}
+                                                placeholder="Username"
+                                            />
+                                            <PasswordInput
+                                                style={{flex: 1}} size="xs" className="mono-input"
+                                                value={authPass}
+                                                onChange={e => setAuthPass(e.target.value)}
+                                                placeholder="Password"
+                                            />
+                                        </>}
+                                    </Group>
+                                    <KVEditor
+                                        rows={headers} onChange={setHeaders}
+                                        keyPlaceholder="X-Request-Id" valuePlaceholder="abc"
+                                        deadTitle={row =>
+                                            authType && row.key.trim().toLowerCase() === 'authorization'
+                                                ? 'Overridden by the auth helper' : undefined}
+                                    />
+                                </Stack>
+                            </Accordion.Panel>
+                        </Accordion.Item>
+
+                        {hasBody &&
+                            <Accordion.Item value="body">
+                                {sectionControl('Body', 0,
+                                    body && <Badge size="xs" variant="light" color="gray" tt="none">{body.length} chars</Badge>,
+                                    <Button size="compact-xs" variant="subtle" color="gray" mx="xs"
+                                        disabled={!looksJson(body)}
+                                        title="Reformat JSON with 2-space indent"
+                                        onClick={formatBody}>Format</Button>)}
+                                <Accordion.Panel>
+                                    <CodeEditor
+                                        key={selected?.req.id ?? 'scratch'}
+                                        value={body}
+                                        onChange={setBody}
+                                        json={looksJson(body)}
+                                        variables={variables}
+                                        placeholder="Request body"
+                                    />
+                                </Accordion.Panel>
+                            </Accordion.Item>}
+
+                        <Accordion.Item value="options">
+                            {sectionControl('Options', optionsCount)}
+                            <Accordion.Panel>
+                                <Group gap="lg" align="center">
+                                    <NumberInput
+                                        w={150} size="xs" className="mono-input"
+                                        min={0} max={600} allowDecimal={false}
+                                        value={timeoutSec || ''}
+                                        onChange={setTimeoutSec}
+                                        placeholder="30"
+                                        label="Timeout (s)"
+                                        styles={{root: {display: 'flex', alignItems: 'center', gap: 8}}}
+                                    />
+                                    <Checkbox
+                                        size="xs"
+                                        label="Don't follow redirects"
+                                        checked={noRedirects}
+                                        onChange={e => setNoRedirects(e.currentTarget.checked)}
+                                    />
+                                    <Checkbox
+                                        size="xs"
+                                        label="Skip TLS verify"
+                                        checked={skipTls}
+                                        onChange={e => setSkipTls(e.currentTarget.checked)}
+                                    />
+                                </Group>
+                            </Accordion.Panel>
+                        </Accordion.Item>
+                    </Accordion>
+                </Tabs.Panel>
+
+                <Tabs.Panel value="scripts" style={{flex: 1, minHeight: 0, overflow: 'auto'}} pt="sm">
+                    <Stack gap="md">
                         <Stack gap="xs">
                             <SectionLabel>Pre-request script</SectionLabel>
+                            <Text size="xs" c="dark.2">
+                                Runs before the HTTP call. Mutate <Text component="code" size="xs" fw={600} c="dark.1">request</Text> to change what gets sent.
+                            </Text>
                             <CodeEditor
                                 key={(selected?.req.id ?? 'scratch') + '-pre'}
                                 value={preScript}
                                 onChange={setPreScript}
-                                placeholder={'// Runs before the HTTP call — mutate `request`'}
+                                placeholder={'// Set headers, rewrite the body, change the method…'}
                                 variables={variables}
-                                minHeight={56}
+                                minHeight={80}
                             />
                             {response?.preScriptLog && response.preScriptLog.trim() ? (
                                 <ScriptLog text={response.preScriptLog}/>
                             ) : null}
                         </Stack>
-                        <Stack gap="xs" mt="md">
+                        <Stack gap="xs">
                             <SectionLabel>Post-response script</SectionLabel>
+                            <Text size="xs" c="dark.2">
+                                Runs after the response arrives. Mutate <Text component="code" size="xs" fw={600} c="dark.1">response</Text> to change what the UI shows,
+                                or call <Text component="code" size="xs" fw={600} c="dark.1">env.set("name", value)</Text> to extract values.
+                            </Text>
                             <CodeEditor
                                 key={(selected?.req.id ?? 'scratch') + '-post'}
                                 value={postScript}
                                 onChange={setPostScript}
-                                placeholder={'// Runs after the response — mutate `response`, call `env.set()`'}
+                                placeholder={'// Inspect the response, set session variables…'}
                                 variables={variables}
-                                minHeight={56}
+                                minHeight={80}
                             />
                             {response?.postScriptLog && response.postScriptLog.trim() ? (
                                 <ScriptLog text={response.postScriptLog}/>
                             ) : null}
                         </Stack>
-                    </Accordion.Panel>
-                </Accordion.Item>
-            </Accordion>
+                    </Stack>
+                </Tabs.Panel>
+            </Tabs>
 
             <ResponseViewer response={response} error={error}/>
         </Stack>
