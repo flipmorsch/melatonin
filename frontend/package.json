@@ -19,6 +19,7 @@
     "@lezer/highlight": "^1.2.3",
     "@mantine/core": "^9.4.1",
     "@mantine/hooks": "^9.4.1",
+    "@tabler/icons-react": "^3.44.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

@@ -1,5 +1,6 @@
 import {useEffect, useState} from 'react';
 import {ActionIcon, Button} from '@mantine/core';
+import {IconTrash} from '@tabler/icons-react';
 
 interface Props {
     onConfirm: () => void;
@@ -42,7 +43,7 @@ export function ConfirmDelete({onConfirm, variant = 'icon', title = 'Delete'}: P
     }
     return (
         <ActionIcon size="sm" variant="subtle" color="gray" title={title} onClick={click}>
-            ✕
+            <IconTrash size={18}/>
         </ActionIcon>
     );
 }

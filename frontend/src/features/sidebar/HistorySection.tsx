@@ -1,4 +1,5 @@
 import {ActionIcon, Box, Group, Text} from '@mantine/core';
+import {IconChevronDown, IconChevronRight} from '@tabler/icons-react';
 import {main} from '../../../wailsjs/go/models';
 import {ConfirmDelete} from '../../components/ConfirmDelete';
 import {SectionLabel} from '../../components/SectionLabel';
@@ -43,7 +44,11 @@ export function HistorySection(p: Props) {
                         <ConfirmDelete title="Clear history" onConfirm={p.onClear}/>}
                     <ActionIcon size="sm" variant="subtle" color="gray"
                         title={p.collapsed ? 'Show history' : 'Hide history'}
-                        onClick={p.onToggle}>{p.collapsed ? '▸' : '▾'}</ActionIcon>
+                        onClick={p.onToggle}>
+                        {p.collapsed
+                            ? <IconChevronRight size={18}/>
+                            : <IconChevronDown size={18}/>}
+                    </ActionIcon>
                 </Group>
             </Group>
 

@@ -1,10 +1,10 @@
 import {useMemo, useState} from 'react';
 import {ActionIcon, Box, Group, Text, TextInput, UnstyledButton} from '@mantine/core';
+import {IconChevronDown, IconChevronRight, IconFileDescription, IconFolderPlus} from '@tabler/icons-react';
 import {main} from '../../../wailsjs/go/models';
 import {ConfirmDelete} from '../../components/ConfirmDelete';
 import {SectionLabel} from '../../components/SectionLabel';
 import {EmptyState} from '../../components/EmptyState';
-import {Chevron} from '../../components/Chevron';
 import {SidebarRow} from './SidebarRow';
 import {MethodBadge} from '../../components/MethodBadge';
 
@@ -65,16 +65,20 @@ export function CollectionsSection(p: Props) {
                     style={{paddingLeft: `${8 + depth * 16}px`}}>
                     <UnstyledButton onClick={() => toggle(folderKey)}
                         style={{flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 4}}>
-                        <Chevron open={!isCollapsed}/>
+                        {isCollapsed
+                            ? <IconChevronRight size={18} style={{flexShrink: 0}}/>
+                            : <IconChevronDown size={18} style={{flexShrink: 0}}/>}
                         <Text size="xs" c="dark.2" truncate>{folder.name}</Text>
                     </UnstyledButton>
                     <ActionIcon size="sm" variant="subtle" color="gray" title="New request"
                         className="row-reveal"
-                        onClick={() => p.onAddRequest(colId, folder.id)}>+</ActionIcon>
+                        onClick={() => p.onAddRequest(colId, folder.id)}>
+                        <IconFileDescription size={18}/>
+                    </ActionIcon>
                     <ActionIcon size="sm" variant="subtle" color="gray" title="New subfolder"
                         className="row-reveal"
                         onClick={() => { setNewFolder({colId, parentId: folder.id}); setFolderName(''); }}>
-                        +F
+                        <IconFolderPlus size={18}/>
                     </ActionIcon>
                     <span className="row-reveal">
                         <ConfirmDelete title="Delete folder"
@@ -133,7 +137,9 @@ export function CollectionsSection(p: Props) {
             <Group justify="space-between" px="xs" mb={4}>
                 <SectionLabel>Collections</SectionLabel>
                 <ActionIcon size="sm" variant="subtle" color="gray" title="New collection"
-                    onClick={() => setNewColName(newColName === null ? '' : null)}>+</ActionIcon>
+                    onClick={() => setNewColName(newColName === null ? '' : null)}>
+                    <IconFolderPlus size={18}/>
+                </ActionIcon>
             </Group>
             {p.collections.length > 0 &&
                 <TextInput
@@ -171,17 +177,21 @@ export function CollectionsSection(p: Props) {
                     <Group gap={2} px="xs" className="hover-row" wrap="nowrap">
                         <UnstyledButton onClick={() => toggle(col.id)}
                             style={{flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 4}}>
-                            <Chevron open={!collapsed.has(col.id)}/>
+                            {collapsed.has(col.id)
+                                ? <IconChevronRight size={18} style={{flexShrink: 0}}/>
+                                : <IconChevronDown size={18} style={{flexShrink: 0}}/>}
                             <Text size="sm" fw={700} c="dark.1" truncate style={{flex: 1}}>
                                 {col.name}
                             </Text>
                         </UnstyledButton>
                         <ActionIcon size="sm" variant="subtle" color="gray" title="New request"
-                            className="row-reveal" onClick={() => p.onAddRequest(col.id)}>+</ActionIcon>
+                            className="row-reveal" onClick={() => p.onAddRequest(col.id)}>
+                            <IconFileDescription size={18}/>
+                        </ActionIcon>
                         <ActionIcon size="sm" variant="subtle" color="gray" title="New folder"
                             className="row-reveal"
                             onClick={() => { setNewFolder({colId: col.id, parentId: ''}); setFolderName(''); }}>
-                            +F
+                            <IconFolderPlus size={18}/>
                         </ActionIcon>
                         <span className="row-reveal">
                             <ConfirmDelete title="Delete collection"

@@ -1,11 +1,11 @@
 import {useState} from 'react';
 import {ActionIcon, Box, Group, Text, UnstyledButton} from '@mantine/core';
+import {IconChevronDown, IconChevronRight, IconPlus, IconServer} from '@tabler/icons-react';
 import {main} from '../../../wailsjs/go/models';
 import {ConfirmDelete} from '../../components/ConfirmDelete';
 import {SectionLabel} from '../../components/SectionLabel';
 import {EmptyState} from '../../components/EmptyState';
 import {RunDot} from '../../components/RunDot';
-import {Chevron} from '../../components/Chevron';
 import {MethodBadge} from '../../components/MethodBadge';
 import {SidebarRow} from './SidebarRow';
 
@@ -48,7 +48,9 @@ export function MocksSection(p: Props) {
             <Group justify="space-between" px="xs" mb={4}>
                 <SectionLabel>Mock Servers</SectionLabel>
                 <ActionIcon size="sm" variant="subtle" color="gray" title="New mock server"
-                    onClick={p.onAdd}>+</ActionIcon>
+                    onClick={p.onAdd}>
+                    <IconServer size={18}/>
+                </ActionIcon>
             </Group>
 
             {p.mocks.length === 0 &&
@@ -67,14 +69,18 @@ export function MocksSection(p: Props) {
                                     aria-label={open ? 'Collapse routes' : 'Expand routes'}
                                     onClick={() => toggle(m.id)}
                                     style={{display: 'flex', alignItems: 'center'}}>
-                                    <Chevron open={open}/>
+                                    {open
+                                        ? <IconChevronDown size={18}/>
+                                        : <IconChevronRight size={18}/>}
                                 </UnstyledButton>}
                             left={<RunDot on={p.running[m.id] !== undefined}/>}
                             label={m.name}
                             right={<>
                                 <Text size="xs" ff="monospace" c="dark.2">:{p.running[m.id] ?? m.port}</Text>
                                 <ActionIcon size="sm" variant="subtle" color="gray" title="New route"
-                                    className="row-reveal" onClick={() => addRoute(m)}>+</ActionIcon>
+                                    className="row-reveal" onClick={() => addRoute(m)}>
+                                    <IconPlus size={18}/>
+                                </ActionIcon>
                                 <span className="row-reveal">
                                     <ConfirmDelete title="Delete mock server" onConfirm={() => p.onDelete(m.id)}/>
                                 </span>
@@ -94,7 +100,7 @@ export function MocksSection(p: Props) {
                                 </span>}
                             />)}
                         {open && (m.routes ?? []).length === 0 &&
-                            <Text size="xs" c="dark.2" px="xs" pl={28} py={2}>no routes — + to add</Text>}
+                            <Text size="xs" c="dark.2" px="xs" pl={28} py={2}>No routes</Text>}
                     </Box>
                 );
             })}
