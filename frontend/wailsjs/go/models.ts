@@ -58,6 +58,7 @@ export namespace main {
 	    body: string;
 	    auth: Auth;
 	    options: SendOptions;
+	    position: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new SavedRequest(source);
@@ -74,6 +75,7 @@ export namespace main {
 	        this.body = source["body"];
 	        this.auth = this.convertValues(source["auth"], Auth);
 	        this.options = this.convertValues(source["options"], SendOptions);
+	        this.position = source["position"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -97,6 +99,7 @@ export namespace main {
 	export class FolderNode {
 	    id: string;
 	    name: string;
+	    position: number;
 	    folders: FolderNode[];
 	    requests: SavedRequest[];
 	
@@ -108,6 +111,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.name = source["name"];
+	        this.position = source["position"];
 	        this.folders = this.convertValues(source["folders"], FolderNode);
 	        this.requests = this.convertValues(source["requests"], SavedRequest);
 	    }

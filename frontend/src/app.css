@@ -212,3 +212,12 @@
     outline: 2px solid var(--mantine-color-violet-4);
     outline-offset: 2px;
 }
+
+/* ---------- drag-and-drop ---------- */
+
+.drag-handle {
+    transition: color 130ms ease;
+}
+.drag-handle:hover {
+    color: var(--mantine-color-violet-4);
+}

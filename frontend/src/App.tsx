@@ -232,6 +232,10 @@ function App() {
                         if (selected?.req.id === reqId) setSelected(null);
                         run(cols.removeRequest(colId, reqId));
                     }}
+                    onReorderRequest={(colId, reqId, newPos) =>
+                        run(cols.reorderRequest(colId, reqId, newPos))}
+                    onReorderFolder={(colId, folderId, newPos) =>
+                        run(cols.reorderFolder(colId, folderId, newPos))}
                     mocks={mocks.mocks}
                     running={mocks.running}
                     selectedMockId={view === 'mock' ? selectedMockId : null}

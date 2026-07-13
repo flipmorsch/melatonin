@@ -333,3 +333,181 @@ func TestSaveRequestUnknownIDs(t *testing.T) {
 		t.Fatal("expected error deleting unknown request")
 	}
 }
+
+func TestMoveRequest(t *testing.T) {
+	a := testApp(t)
+	col, _ := a.CreateCollection("Test")
+
+	// Create three requests at root.
+	r1, _ := a.SaveRequest(col.ID, SavedRequest{Name: "A", Method: "GET", URL: "http://x"}, "")
+	_, _ = a.SaveRequest(col.ID, SavedRequest{Name: "B", Method: "GET", URL: "http://x"}, "")
+	r3, _ := a.SaveRequest(col.ID, SavedRequest{Name: "C", Method: "GET", URL: "http://x"}, "")
+
+	// Move r1 (currently position 0) to position 1.
+	if err := a.MoveRequest(col.ID, r1.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	cols, _ := a.ListCollections()
+	reqs := cols[0].Requests
+	if reqs[0].Name != "B" || reqs[1].Name != "A" || reqs[2].Name != "C" {
+		t.Fatalf("after move to 1: got %v", names(reqs))
+	}
+
+	// Move r3 (currently position 2) to position 0.
+	if err := a.MoveRequest(col.ID, r3.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	cols, _ = a.ListCollections()
+	reqs = cols[0].Requests
+	if reqs[0].Name != "C" || reqs[1].Name != "B" || reqs[2].Name != "A" {
+		t.Fatalf("after move to 0: got %v", names(reqs))
+	}
+
+	// Positions should be sequential after each move.
+	for i, req := range reqs {
+		if req.Position != i {
+			t.Fatalf("request %q has position %d, want %d", req.Name, req.Position, i)
+		}
+	}
+}
+
+func TestMoveRequestRoundTrip(t *testing.T) {
+	a := testApp(t)
+	col, _ := a.CreateCollection("Test")
+
+	r1, _ := a.SaveRequest(col.ID, SavedRequest{Name: "A", Method: "GET", URL: "http://x"}, "")
+	_, _ = a.SaveRequest(col.ID, SavedRequest{Name: "B", Method: "GET", URL: "http://x"}, "")
+
+	// Move and re-read from disk to verify persistence.
+	a.MoveRequest(col.ID, r1.ID, 1)
+
+	// Re-read via ListCollections (fresh from disk).
+	cols, _ := a.ListCollections()
+	reqs := cols[0].Requests
+	if reqs[0].Name != "B" || reqs[1].Name != "A" {
+		t.Fatalf("round-trip: got %v", names(reqs))
+	}
+	if reqs[0].Position != 0 || reqs[1].Position != 1 {
+		t.Fatalf("round-trip positions: [0]=%d [1]=%d", reqs[0].Position, reqs[1].Position)
+	}
+}
+
+func TestMoveRequestErrors(t *testing.T) {
+	a := testApp(t)
+	col, _ := a.CreateCollection("Test")
+
+	if err := a.MoveRequest("nope", "r1", 0); err == nil {
+		t.Fatal("expected error for unknown collection")
+	}
+	if err := a.MoveRequest(col.ID, "ghost", 0); err == nil {
+		t.Fatal("expected error for unknown request")
+	}
+}
+
+func TestMoveRequestInFolder(t *testing.T) {
+	a := testApp(t)
+	col, _ := a.CreateCollection("Test")
+	f, _ := a.CreateFolder(col.ID, "", "folder")
+
+	// Save requests inside the folder.
+	_, _ = a.SaveRequest(col.ID, SavedRequest{Name: "X", Method: "GET", URL: "http://x"}, f.ID)
+	_, _ = a.SaveRequest(col.ID, SavedRequest{Name: "Y", Method: "GET", URL: "http://x"}, f.ID)
+	r3, _ := a.SaveRequest(col.ID, SavedRequest{Name: "Z", Method: "GET", URL: "http://x"}, f.ID)
+
+	// Move last to first.
+	if err := a.MoveRequest(col.ID, r3.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	cols, _ := a.ListCollections()
+	reqs := cols[0].Folders[0].Requests
+	if reqs[0].Name != "Z" || reqs[1].Name != "X" || reqs[2].Name != "Y" {
+		t.Fatalf("move in folder: got %v", names(reqs))
+	}
+}
+
+func TestMoveFolder(t *testing.T) {
+	a := testApp(t)
+	col, _ := a.CreateCollection("Test")
+
+	_, _ = a.CreateFolder(col.ID, "", "alpha")
+	_, _ = a.CreateFolder(col.ID, "", "beta")
+	f3, _ := a.CreateFolder(col.ID, "", "gamma")
+
+	// Move f3 (position 2) to position 0.
+	if err := a.MoveFolder(col.ID, f3.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	cols, _ := a.ListCollections()
+	folders := cols[0].Folders
+	if folders[0].Name != "gamma" || folders[1].Name != "alpha" || folders[2].Name != "beta" {
+		t.Fatalf("after move: got %v", folderNames(folders))
+	}
+	for i, f := range folders {
+		if f.Position != i {
+			t.Fatalf("folder %q has position %d, want %d", f.Name, f.Position, i)
+		}
+	}
+}
+
+func TestMoveFolderErrors(t *testing.T) {
+	a := testApp(t)
+	col, _ := a.CreateCollection("Test")
+
+	if err := a.MoveFolder("nope", "f1", 0); err == nil {
+		t.Fatal("expected error for unknown collection")
+	}
+	if err := a.MoveFolder(col.ID, "ghost", 0); err == nil {
+		t.Fatal("expected error for unknown folder")
+	}
+}
+
+func TestMoveFolderInFolder(t *testing.T) {
+	a := testApp(t)
+	col, _ := a.CreateCollection("Test")
+	parent, _ := a.CreateFolder(col.ID, "", "parent")
+
+	_, _ = a.CreateFolder(col.ID, parent.ID, "one")
+	child2, _ := a.CreateFolder(col.ID, parent.ID, "two")
+
+	// Move child2 to position 0.
+	if err := a.MoveFolder(col.ID, child2.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	cols, _ := a.ListCollections()
+	children := cols[0].Folders[0].Folders
+	if children[0].Name != "two" || children[1].Name != "one" {
+		t.Fatalf("move child folder: got %v", folderNames(children))
+	}
+}
+
+func TestNewRequestPosition(t *testing.T) {
+	a := testApp(t)
+	col, _ := a.CreateCollection("Test")
+
+	a.SaveRequest(col.ID, SavedRequest{Name: "first", Method: "GET", URL: "http://x"}, "")
+	a.SaveRequest(col.ID, SavedRequest{Name: "second", Method: "GET", URL: "http://x"}, "")
+	a.SaveRequest(col.ID, SavedRequest{Name: "third", Method: "GET", URL: "http://x"}, "")
+
+	cols, _ := a.ListCollections()
+	for i, req := range cols[0].Requests {
+		if req.Position != i {
+			t.Fatalf("new request %q: position=%d, want=%d", req.Name, req.Position, i)
+		}
+	}
+}
+
+func names(reqs []SavedRequest) []string {
+	out := make([]string, len(reqs))
+	for i, r := range reqs {
+		out[i] = r.Name
+	}
+	return out
+}
+
+func folderNames(folders []FolderNode) []string {
+	out := make([]string, len(folders))
+	for i, f := range folders {
+		out[i] = f.Name
+	}
+	return out
+}

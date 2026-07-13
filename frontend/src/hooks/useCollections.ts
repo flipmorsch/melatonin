@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useState} from 'react';
-import {CreateCollection, CreateFolder, DeleteCollection, DeleteFolder, DeleteRequest, CountFolderDescendants, ListCollections, SaveRequest} from '../../wailsjs/go/main/App';
+import {CreateCollection, CreateFolder, DeleteCollection, DeleteFolder, DeleteRequest, CountFolderDescendants, ListCollections, MoveFolder, MoveRequest, SaveRequest} from '../../wailsjs/go/main/App';
 import {main} from '../../wailsjs/go/models';
 
 /** Collections state + persistence. Actions throw — callers surface errors. */
@@ -47,6 +47,16 @@ export function useCollections() {
         return await CountFolderDescendants(colId, folderId);
     };
 
+    const reorderRequest = async (colId: string, reqId: string, newPosition: number) => {
+        await MoveRequest(colId, reqId, newPosition);
+        await refresh();
+    };
+
+    const reorderFolder = async (colId: string, folderId: string, newPosition: number) => {
+        await MoveFolder(colId, folderId, newPosition);
+        await refresh();
+    };
+
     return {collections, refresh, create, remove, saveRequest, removeRequest,
-        createFolder, removeFolder, countFolder};
+        createFolder, removeFolder, countFolder, reorderRequest, reorderFolder};
 }

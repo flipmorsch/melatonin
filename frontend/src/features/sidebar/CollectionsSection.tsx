@@ -1,11 +1,25 @@
-import {useMemo, useState} from 'react';
+import {useMemo, useState, ReactNode, useCallback} from 'react';
 import {ActionIcon, Box, Group, Text, TextInput, UnstyledButton} from '@mantine/core';
-import {IconChevronDown, IconChevronRight, IconFileDescription, IconFolderPlus} from '@tabler/icons-react';
+import {IconChevronDown, IconChevronRight, IconFileDescription, IconFolderPlus, IconGripVertical} from '@tabler/icons-react';
+import {
+    DndContext,
+    DragEndEvent,
+    DragOverlay,
+    DragStartEvent,
+    KeyboardSensor,
+    PointerSensor,
+    closestCenter,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
+import {SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy} from '@dnd-kit/sortable';
+import {CSS} from '@dnd-kit/utilities';
 import {main} from '../../../wailsjs/go/models';
 import {ConfirmDelete} from '../../components/ConfirmDelete';
 import {SectionLabel} from '../../components/SectionLabel';
 import {EmptyState} from '../../components/EmptyState';
 import {SidebarRow} from './SidebarRow';
+import {SortableSidebarRow} from './SortableSidebarRow';
 import {MethodBadge} from '../../components/MethodBadge';
 
 interface Props {
@@ -19,21 +33,203 @@ interface Props {
     onCountFolder: (colId: string, folderId: string) => Promise<number>;
     onAddRequest: (colId: string, parentFolderId?: string) => void;
     onDeleteRequest: (colId: string, reqId: string) => void;
+    onReorderRequest: (colId: string, reqId: string, newPosition: number) => void;
+    onReorderFolder: (colId: string, folderId: string, newPosition: number) => void;
 }
+
+// ── Sortable folder wrapper ──────────────────────────────────────────
+
+function SortableFolderRow({folder, colId, depth, collapsed, onToggle, selectedReqId, onAddRequest, onDeleteFolder, onCountFolder, onDeleteRequest, onCreateFolder, onSelect, newFolder, setNewFolder, folderName, setFolderName, requestRows, subfolderRows}: {
+    folder: main.FolderNode;
+    colId: string;
+    depth: number;
+    collapsed: boolean;
+    onToggle: () => void;
+    selectedReqId: string | null;
+    onAddRequest: (colId: string, parentFolderId?: string) => void;
+    onDeleteFolder: (colId: string, folderId: string) => Promise<void>;
+    onCountFolder: (colId: string, folderId: string) => Promise<number>;
+    onDeleteRequest: (colId: string, reqId: string) => void;
+    onCreateFolder: (colId: string, parentFolderId: string, name: string) => Promise<void>;
+    onSelect: (colId: string, req: main.SavedRequest) => void;
+    newFolder: {colId: string, parentId: string} | null;
+    setNewFolder: (v: {colId: string, parentId: string} | null) => void;
+    folderName: string;
+    setFolderName: (v: string) => void;
+    /** Requests rendered inside this folder (sortable list). */
+    requestRows: ReactNode;
+    /** Subfolders rendered inside this folder (sortable list). */
+    subfolderRows: ReactNode;
+}) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        setActivatorNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({id: folder.id});
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.3 : undefined,
+    };
+
+    const isCollapsed = collapsed;
+
+    return (
+        <Box ref={setNodeRef} style={style}>
+            <Group gap={2} px="xs" className="hover-row" wrap="nowrap"
+                style={{paddingLeft: `${8 + depth * 16}px`}}>
+                <Box
+                    ref={setActivatorNodeRef}
+                    {...attributes}
+                    {...listeners}
+                    style={{cursor: 'grab', display: 'flex', alignItems: 'center', touchAction: 'none'}}
+                    className="drag-handle"
+                >
+                    <IconGripVertical size={14} style={{color: 'var(--mantine-color-dark-3)'}}/>
+                </Box>
+                <UnstyledButton onClick={onToggle}
+                    style={{flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 4}}>
+                    {isCollapsed
+                        ? <IconChevronRight size={18} className="chevron" style={{flexShrink: 0}}/>
+                        : <IconChevronDown size={18} className="chevron open" style={{flexShrink: 0}}/>}
+                    <Text size="xs" c="dark.2" truncate>{folder.name}</Text>
+                </UnstyledButton>
+                <ActionIcon size="sm" variant="subtle" color="gray" title="New request"
+                    className="row-reveal"
+                    onClick={() => onAddRequest(colId, folder.id)}>
+                    <IconFileDescription size={18}/>
+                </ActionIcon>
+                <ActionIcon size="sm" variant="subtle" color="gray" title="New subfolder"
+                    className="row-reveal"
+                    onClick={() => { setNewFolder({colId, parentId: folder.id}); setFolderName(''); }}>
+                    <IconFolderPlus size={18}/>
+                </ActionIcon>
+                <span className="row-reveal">
+                    <ConfirmDelete title="Delete folder"
+                        onConfirm={async () => {
+                            const n = await onCountFolder(colId, folder.id);
+                            if (n > 0 && !confirm(`Delete folder "${folder.name}" and its ${n} request(s)?`))
+                                return;
+                            await onDeleteFolder(colId, folder.id);
+                        }}/>
+                </span>
+            </Group>
+
+            {/* New folder form inside this folder */}
+            {newFolder?.colId === colId && newFolder?.parentId === folder.id &&
+                <FolderNameForm name={folderName} onChange={setFolderName}
+                    onCancel={() => setNewFolder(null)}
+                    onSubmit={() => {
+                        if (folderName.trim()) {
+                            onCreateFolder(colId, folder.id, folderName.trim()).then(() => setNewFolder(null));
+                        }
+                    }}
+                    depth={depth + 1}/>}
+
+            {!isCollapsed && (folder.requests.length > 0 || folder.folders.length > 0) &&
+                <Box style={{
+                    borderLeft: '1px solid var(--mantine-color-dark-4)',
+                    marginLeft: `${16 + depth * 16}px`,
+                    paddingLeft: 8,
+                }}>
+                    {requestRows}
+                    {subfolderRows}
+                </Box>}
+            {!isCollapsed && folder.requests.length === 0 && folder.folders.length === 0 &&
+                <Text size="xs" c="dark.3" style={{paddingLeft: `${24 + depth * 16}px`}} py={4}>
+                    Empty folder
+                </Text>}
+        </Box>
+    );
+}
+
+// ── Main component ───────────────────────────────────────────────────
 
 export function CollectionsSection(p: Props) {
     const [newColName, setNewColName] = useState<string | null>(null);
     const [newFolder, setNewFolder] = useState<{colId: string, parentId: string} | null>(null);
     const [folderName, setFolderName] = useState('');
     const [filter, setFilter] = useState('');
-    // collapsed keys: colId for a collection, `${colId}/${folderId}` for a folder
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+    const [activeId, setActiveId] = useState<string | null>(null);
 
     const toggle = (key: string) => setCollapsed(prev => {
         const next = new Set(prev);
         if (next.has(key)) next.delete(key); else next.add(key);
         return next;
     });
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, {activationConstraint: {distance: 5}}),
+        useSensor(KeyboardSensor, {coordinateGetter: sortableKeyboardCoordinates}),
+    );
+
+    function handleDragStart(event: DragStartEvent) {
+        setActiveId(event.active.id as string);
+    }
+
+    function handleDragEnd(event: DragEndEvent) {
+        setActiveId(null);
+        const {active, over} = event;
+        if (!over || active.id === over.id) return;
+
+        const activeStr = active.id as string;
+        const overStr = over.id as string;
+
+        // Determine which list was dragged and compute new position.
+        // active.data.current?.sortable tells us the SortableContext.
+        const container = active.data.current?.sortable?.containerId;
+        if (!container) return;
+
+        // The container format is: "reqs:{parentId}" or "folders:{parentId}"
+        const [kind, parentId] = container.split(':');
+        // Find the collection owning this parent (the active item belongs to a collection).
+        // The parentId identifies the folder (or "root" for collection root).
+        // We need to find which collection contains this item.
+        const col = p.collections.find(c => {
+            if (parentId === 'root') {
+                if (kind === 'reqs') return c.requests.some(r => r.id === activeStr);
+                return c.folders.some(f => f.id === activeStr);
+            }
+            // Walk the tree.
+            return containsItem(c, parentId, activeStr, kind as 'reqs' | 'folders');
+        });
+        if (!col) return;
+
+        // Find the list of IDs to compute the new position.
+        let ids: string[];
+        if (kind === 'reqs') {
+            if (parentId === 'root') {
+                ids = col.requests.map(r => r.id);
+            } else {
+                const f = findFolder(col, parentId);
+                if (!f) return;
+                ids = f.requests.map(r => r.id);
+            }
+        } else {
+            if (parentId === 'root') {
+                ids = col.folders.map(f => f.id);
+            } else {
+                const f = findFolder(col, parentId);
+                if (!f) return;
+                ids = f.folders.map(f2 => f2.id);
+            }
+        }
+
+        const newPos = ids.indexOf(overStr);
+        if (newPos < 0) return;
+
+        if (kind === 'reqs') {
+            p.onReorderRequest(col.id, activeStr, newPos);
+        } else {
+            p.onReorderFolder(col.id, activeStr, newPos);
+        }
+    }
 
     /** Check if any request in a tree matches the filter query. */
     function treeMatchesFilter(folders: main.FolderNode[], reqs: main.SavedRequest[], q: string): boolean {
@@ -54,191 +250,283 @@ export function CollectionsSection(p: Props) {
         );
     }, [p.collections, filter]);
 
-    /** Render a folder and its children recursively. */
-    function renderFolder(colId: string, folder: main.FolderNode, depth: number) {
-        const folderKey = `${colId}/${folder.id}`;
-        const isCollapsed = collapsed.has(folderKey);
+    /** Render folder children — the sortable lists inside a folder. */
+    function renderFolderChildren(colId: string, folder: main.FolderNode, depth: number) {
+        const isCollapsed = collapsed.has(`${colId}/${folder.id}`);
 
         return (
-            <Box key={folder.id}>
-                <Group gap={2} px="xs" className="hover-row" wrap="nowrap"
-                    style={{paddingLeft: `${8 + depth * 16}px`}}>
-                    <UnstyledButton onClick={() => toggle(folderKey)}
-                        style={{flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 4}}>
-                        {isCollapsed
-                            ? <IconChevronRight size={18} className="chevron" style={{flexShrink: 0}}/>
-                            : <IconChevronDown size={18} className="chevron open" style={{flexShrink: 0}}/>}
-                        <Text size="xs" c="dark.2" truncate>{folder.name}</Text>
-                    </UnstyledButton>
-                    <ActionIcon size="sm" variant="subtle" color="gray" title="New request"
-                        className="row-reveal"
-                        onClick={() => p.onAddRequest(colId, folder.id)}>
-                        <IconFileDescription size={18}/>
-                    </ActionIcon>
-                    <ActionIcon size="sm" variant="subtle" color="gray" title="New subfolder"
-                        className="row-reveal"
-                        onClick={() => { setNewFolder({colId, parentId: folder.id}); setFolderName(''); }}>
-                        <IconFolderPlus size={18}/>
-                    </ActionIcon>
-                    <span className="row-reveal">
-                        <ConfirmDelete title="Delete folder"
-                            onConfirm={async () => {
-                                const n = await p.onCountFolder(colId, folder.id);
-                                if (n > 0 && !confirm(`Delete folder "${folder.name}" and its ${n} request(s)?`))
-                                    return;
-                                await p.onDeleteFolder(colId, folder.id);
-                            }}/>
-                    </span>
-                </Group>
-
-                {/* New folder form inside this folder */}
-                {newFolder?.colId === colId && newFolder?.parentId === folder.id &&
-                    <FolderNameForm name={folderName} onChange={setFolderName}
-                        onCancel={() => setNewFolder(null)}
-                        onSubmit={() => {
-                            if (folderName.trim()) {
-                                p.onCreateFolder(colId, folder.id, folderName.trim()).then(() => setNewFolder(null));
-                            }
-                        }}
-                        depth={depth + 1}/>}
-
-                {!isCollapsed && (folder.requests.length > 0 || folder.folders.length > 0) &&
-                    <Box style={{
-                        borderLeft: '1px solid var(--mantine-color-dark-4)',
-                        marginLeft: `${16 + depth * 16}px`,
-                        paddingLeft: 8,
-                    }}>
-                        {folder.requests.map(req =>
-                            <Box key={req.id} className="tree-row">
-                                <SidebarRow
-                                    rowId={`req:${req.id}`}
-                                    depth={0}
-                                    selected={p.selectedReqId === req.id}
-                                    onClick={() => p.onSelect(colId, req)}
-                                    onDelete={() => p.onDeleteRequest(colId, req.id)}
-                                    contextActions={[{label: 'Delete', color: 'red', onClick: () => p.onDeleteRequest(colId, req.id)}]}
-                                    left={<MethodBadge method={req.method}/>}
-                                    label={req.name}
-                                    right={<span className="row-reveal">
-                                        <ConfirmDelete title="Delete request"
-                                            onConfirm={() => p.onDeleteRequest(colId, req.id)}/>
-                                    </span>}
-                                />
-                            </Box>)}
-                        {folder.folders.map(f => renderFolder(colId, f, depth + 1))}
-                    </Box>}
-                {!isCollapsed && folder.requests.length === 0 && folder.folders.length === 0 &&
-                    <Text size="xs" c="dark.3" style={{paddingLeft: `${24 + depth * 16}px`}} py={4}>
-                        Empty folder
-                    </Text>}
-            </Box>
+            <SortableFolderRow
+                key={folder.id}
+                folder={folder}
+                colId={colId}
+                depth={depth}
+                collapsed={isCollapsed}
+                onToggle={() => toggle(`${colId}/${folder.id}`)}
+                selectedReqId={p.selectedReqId}
+                onAddRequest={p.onAddRequest}
+                onDeleteFolder={p.onDeleteFolder}
+                onCountFolder={p.onCountFolder}
+                onDeleteRequest={p.onDeleteRequest}
+                onCreateFolder={p.onCreateFolder}
+                onSelect={p.onSelect}
+                newFolder={newFolder}
+                setNewFolder={setNewFolder}
+                folderName={folderName}
+                setFolderName={setFolderName}
+                requestRows={
+                    folder.requests.length > 0 && !isCollapsed ? (
+                        <SortableContext
+                            id={`reqs:${folder.id}`}
+                            items={folder.requests.map(r => r.id)}
+                            strategy={verticalListSortingStrategy}
+                        >
+                            {folder.requests.map(req =>
+                                <Box key={req.id} className="tree-row">
+                                    <SortableSidebarRow
+                                        id={req.id}
+                                        depth={0}
+                                        selected={p.selectedReqId === req.id}
+                                        onClick={() => p.onSelect(colId, req)}
+                                        onDelete={() => p.onDeleteRequest(colId, req.id)}
+                                        contextActions={[{label: 'Delete', color: 'red', onClick: () => p.onDeleteRequest(colId, req.id)}]}
+                                        left={<MethodBadge method={req.method}/>}
+                                        label={req.name}
+                                        right={<span className="row-reveal">
+                                            <ConfirmDelete title="Delete request"
+                                                onConfirm={() => p.onDeleteRequest(colId, req.id)}/>
+                                        </span>}
+                                    />
+                                </Box>
+                            )}
+                        </SortableContext>
+                    ) : null
+                }
+                subfolderRows={
+                    folder.folders.length > 0 && !isCollapsed ? (
+                        <SortableContext
+                            id={`folders:${folder.id}`}
+                            items={folder.folders.map(f => f.id)}
+                            strategy={verticalListSortingStrategy}
+                        >
+                            {folder.folders.map(f =>
+                                renderFolderChildren(colId, f, depth + 1)
+                            )}
+                        </SortableContext>
+                    ) : null
+                }
+            />
         );
     }
 
     return (
-        <Box>
-            <Group justify="space-between" px="xs" mb={4}>
-                <SectionLabel>Collections</SectionLabel>
-                <ActionIcon size="sm" variant="subtle" color="gray" title="New collection"
-                    onClick={() => setNewColName(newColName === null ? '' : null)}>
-                    <IconFolderPlus size={18}/>
-                </ActionIcon>
-            </Group>
-            {p.collections.length > 0 &&
-                <TextInput
-                    size="xs" px="xs" mb="xs"
-                    value={filter}
-                    onChange={e => setFilter(e.target.value)}
-                    placeholder="Filter requests…"
-                    aria-label="Filter requests"
-                    data-sidebar-filter=""
-                />}
-
-            {newColName !== null &&
-                <form onSubmit={e => {
-                    e.preventDefault();
-                    if (newColName.trim()) {
-                        p.onCreateCollection(newColName.trim());
-                        setNewColName(null);
-                    }
-                }}>
+        <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDragCancel={() => setActiveId(null)}
+        >
+            <Box>
+                <Group justify="space-between" px="xs" mb={4}>
+                    <SectionLabel>Collections</SectionLabel>
+                    <ActionIcon size="sm" variant="subtle" color="gray" title="New collection"
+                        onClick={() => setNewColName(newColName === null ? '' : null)}>
+                        <IconFolderPlus size={18}/>
+                    </ActionIcon>
+                </Group>
+                {p.collections.length > 0 &&
                     <TextInput
                         size="xs" px="xs" mb="xs"
-                        value={newColName}
-                        onChange={e => setNewColName(e.target.value)}
-                        placeholder="Collection name"
-                        autoFocus
-                    />
-                </form>}
+                        value={filter}
+                        onChange={e => setFilter(e.target.value)}
+                        placeholder="Filter requests…"
+                        aria-label="Filter requests"
+                        data-sidebar-filter=""
+                    />}
 
-            {filtered.length === 0 && newColName === null && !filter.trim() &&
-                <EmptyState>No collections yet — create one to save requests</EmptyState>}
-            {filtered.length === 0 && p.collections.length > 0 && filter.trim() &&
-                <EmptyState>{`No requests match "${filter}"`}</EmptyState>}
+                {newColName !== null &&
+                    <form onSubmit={e => {
+                        e.preventDefault();
+                        if (newColName.trim()) {
+                            p.onCreateCollection(newColName.trim());
+                            setNewColName(null);
+                        }
+                    }}>
+                        <TextInput
+                            size="xs" px="xs" mb="xs"
+                            value={newColName}
+                            onChange={e => setNewColName(e.target.value)}
+                            placeholder="Collection name"
+                            autoFocus
+                        />
+                    </form>}
 
-            {filtered.map(col =>
-                <Box key={col.id} mb="sm">
-                    <Group gap={2} px={4} py={3} className="side-row" wrap="nowrap"
-                        data-sidebar-row={`col:${col.id}`} tabIndex={-1}
-                        style={{minHeight: 32, borderRadius: 'var(--mantine-radius-sm)'}}>
-                        <UnstyledButton onClick={() => toggle(col.id)}
-                            style={{flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 4}}
-                            tabIndex={-1}>
-                            {collapsed.has(col.id)
-                                ? <IconChevronRight size={18} className="chevron" style={{flexShrink: 0}}/>
-                                : <IconChevronDown size={18} className="chevron open" style={{flexShrink: 0}}/>}
-                            <Text size="sm" fw={700} c="dark.1" truncate style={{flex: 1}}>
-                                {col.name}
-                            </Text>
-                        </UnstyledButton>
-                        <ActionIcon size="sm" variant="subtle" color="gray" title="New request"
-                            className="row-reveal" onClick={() => p.onAddRequest(col.id)}>
-                            <IconFileDescription size={18}/>
-                        </ActionIcon>
-                        <ActionIcon size="sm" variant="subtle" color="gray" title="New folder"
-                            className="row-reveal"
-                            onClick={() => { setNewFolder({colId: col.id, parentId: ''}); setFolderName(''); }}>
-                            <IconFolderPlus size={18}/>
-                        </ActionIcon>
-                        <span className="row-reveal">
-                            <ConfirmDelete title="Delete collection"
-                                onConfirm={() => p.onDeleteCollection(col.id)}/>
-                        </span>
-                    </Group>
+                {filtered.length === 0 && newColName === null && !filter.trim() &&
+                    <EmptyState>No collections yet — create one to save requests</EmptyState>}
+                {filtered.length === 0 && p.collections.length > 0 && filter.trim() &&
+                    <EmptyState>{`No requests match "${filter}"`}</EmptyState>}
 
-                    {/* New folder form at root */}
-                    {newFolder?.colId === col.id && newFolder?.parentId === '' &&
-                        <FolderNameForm name={folderName} onChange={setFolderName}
-                            onCancel={() => setNewFolder(null)}
-                            onSubmit={() => {
-                                if (folderName.trim()) {
-                                    p.onCreateFolder(col.id, '', folderName.trim()).then(() => setNewFolder(null));
-                                }
-                            }}
-                            depth={0}/>}
+                {filtered.map(col =>
+                    <Box key={col.id} mb="sm">
+                        <Group gap={2} px={4} py={3} className="side-row" wrap="nowrap"
+                            data-sidebar-row={`col:${col.id}`} tabIndex={-1}
+                            style={{minHeight: 32, borderRadius: 'var(--mantine-radius-sm)'}}>
+                            <UnstyledButton onClick={() => toggle(col.id)}
+                                style={{flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 4}}
+                                tabIndex={-1}>
+                                {collapsed.has(col.id)
+                                    ? <IconChevronRight size={18} className="chevron" style={{flexShrink: 0}}/>
+                                    : <IconChevronDown size={18} className="chevron open" style={{flexShrink: 0}}/>}
+                                <Text size="sm" fw={700} c="dark.1" truncate style={{flex: 1}}>
+                                    {col.name}
+                                </Text>
+                            </UnstyledButton>
+                            <ActionIcon size="sm" variant="subtle" color="gray" title="New request"
+                                className="row-reveal" onClick={() => p.onAddRequest(col.id)}>
+                                <IconFileDescription size={18}/>
+                            </ActionIcon>
+                            <ActionIcon size="sm" variant="subtle" color="gray" title="New folder"
+                                className="row-reveal"
+                                onClick={() => { setNewFolder({colId: col.id, parentId: ''}); setFolderName(''); }}>
+                                <IconFolderPlus size={18}/>
+                            </ActionIcon>
+                            <span className="row-reveal">
+                                <ConfirmDelete title="Delete collection"
+                                    onConfirm={() => p.onDeleteCollection(col.id)}/>
+                            </span>
+                        </Group>
 
-                    {!collapsed.has(col.id) && <>
-                        {col.requests.map(req =>
-                            <SidebarRow
-                                key={req.id}
-                                rowId={`req:${req.id}`}
-                                depth={0}
-                                selected={p.selectedReqId === req.id}
-                                onClick={() => p.onSelect(col.id, req)}
-                                onDelete={() => p.onDeleteRequest(col.id, req.id)}
-                                contextActions={[{label: 'Delete', color: 'red', onClick: () => p.onDeleteRequest(col.id, req.id)}]}
-                                left={<MethodBadge method={req.method}/>}
-                                label={req.name}
-                                right={<span className="row-reveal">
-                                    <ConfirmDelete title="Delete request"
-                                        onConfirm={() => p.onDeleteRequest(col.id, req.id)}/>
-                                </span>}
-                            />)}
-                        {col.folders.map(f => renderFolder(col.id, f, 0))}
-                    </>}
-                </Box>)}
-        </Box>
+                        {/* New folder form at root */}
+                        {newFolder?.colId === col.id && newFolder?.parentId === '' &&
+                            <FolderNameForm name={folderName} onChange={setFolderName}
+                                onCancel={() => setNewFolder(null)}
+                                onSubmit={() => {
+                                    if (folderName.trim()) {
+                                        p.onCreateFolder(col.id, '', folderName.trim()).then(() => setNewFolder(null));
+                                    }
+                                }}
+                                depth={0}/>}
+
+                        {!collapsed.has(col.id) && <>
+                            {col.requests.length > 0 && (
+                                <SortableContext
+                                    id="reqs:root"
+                                    items={col.requests.map(r => r.id)}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    {col.requests.map(req =>
+                                        <SortableSidebarRow
+                                            key={req.id}
+                                            id={req.id}
+                                            depth={0}
+                                            selected={p.selectedReqId === req.id}
+                                            onClick={() => p.onSelect(col.id, req)}
+                                            onDelete={() => p.onDeleteRequest(col.id, req.id)}
+                                            contextActions={[{label: 'Delete', color: 'red', onClick: () => p.onDeleteRequest(col.id, req.id)}]}
+                                            left={<MethodBadge method={req.method}/>}
+                                            label={req.name}
+                                            right={<span className="row-reveal">
+                                                <ConfirmDelete title="Delete request"
+                                                    onConfirm={() => p.onDeleteRequest(col.id, req.id)}/>
+                                            </span>}
+                                        />
+                                    )}
+                                </SortableContext>
+                            )}
+                            {col.folders.length > 0 && (
+                                <SortableContext
+                                    id="folders:root"
+                                    items={col.folders.map(f => f.id)}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    {col.folders.map(f =>
+                                        renderFolderChildren(col.id, f, 0)
+                                    )}
+                                </SortableContext>
+                            )}
+                        </>}
+                    </Box>
+                )}
+            </Box>
+
+            <DragOverlay dropAnimation={null}>
+                {activeId ? <DragPreview activeId={activeId} collections={p.collections} /> : null}
+            </DragOverlay>
+        </DndContext>
     );
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────
+
+/** DragOverlay preview — a compact ghost of the row being dragged. */
+function DragPreview({activeId, collections}: {activeId: string; collections: main.Collection[]}) {
+    for (const col of collections) {
+        const req = col.requests.find(r => r.id === activeId);
+        if (req) {
+            return (
+                <Box
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '4px 8px',
+                        borderRadius: 'var(--mantine-radius-sm)',
+                        background: `var(--mantine-color-dark-5)`,
+                        border: '1px solid var(--mantine-color-violet-4)',
+                        boxShadow: '0 0 12px color-mix(in srgb, var(--mantine-color-violet-4) 30%, transparent)',
+                    }}
+                >
+                    <MethodBadge method={req.method}/>
+                    <Text size="sm" c="dark.0">{req.name}</Text>
+                </Box>
+            );
+        }
+        const folder = findFolder(col, activeId);
+        if (folder) {
+            return (
+                <Box
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '4px 8px',
+                        borderRadius: 'var(--mantine-radius-sm)',
+                        background: `var(--mantine-color-dark-5)`,
+                        border: '1px solid var(--mantine-color-violet-4)',
+                        boxShadow: '0 0 12px color-mix(in srgb, var(--mantine-color-violet-4) 30%, transparent)',
+                    }}
+                >
+                    <IconGripVertical size={14} style={{color: 'var(--mantine-color-dark-3)'}}/>
+                    <Text size="xs" c="dark.0">{folder.name}</Text>
+                </Box>
+            );
+        }
+    }
+    return null;
+}
+
+function findFolder(col: main.Collection, id: string): main.FolderNode | null {
+    for (const f of col.folders) {
+        const found = findFolderRec(f, id);
+        if (found) return found;
+    }
+    return null;
+}
+
+function findFolderRec(f: main.FolderNode, id: string): main.FolderNode | null {
+    if (f.id === id) return f;
+    for (const child of f.folders) {
+        const found = findFolderRec(child, id);
+        if (found) return found;
+    }
+    return null;
+}
+
+function containsItem(col: main.Collection, parentId: string, itemId: string, kind: 'reqs' | 'folders'): boolean {
+    const folder = findFolder(col, parentId);
+    if (!folder) return false;
+    if (kind === 'reqs') return folder.requests.some(r => r.id === itemId);
+    return folder.folders.some(f => f.id === itemId);
 }
 
 /** Inline form for naming a new folder. */

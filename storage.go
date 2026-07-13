@@ -49,23 +49,24 @@ func (l *KVList) UnmarshalJSON(data []byte) error {
 // SavedRequest is an HTTP request definition stored inside a Collection
 // (at root or nested inside a FolderNode).
 type SavedRequest struct {
-	ID      string      `json:"id"`
-	Name    string      `json:"name"`
-	Method  string      `json:"method"`
-	URL     string      `json:"url"`
-	Params  KVList      `json:"params"`
-	Headers KVList      `json:"headers"`
-	Body    string      `json:"body"`
-	Auth    Auth        `json:"auth"`
-	Options SendOptions `json:"options"` // zero value in pre-v1.1 collection files = all defaults
+	ID       string      `json:"id"`
+	Name     string      `json:"name"`
+	Method   string      `json:"method"`
+	URL      string      `json:"url"`
+	Params   KVList      `json:"params"`
+	Headers  KVList      `json:"headers"`
+	Body     string      `json:"body"`
+	Auth     Auth        `json:"auth"`
+	Options  SendOptions `json:"options"` // zero value in pre-v1.1 collection files = all defaults
+	Position int         `json:"position"`
 }
 
 // FolderNode is a named grouping inside a Collection. It contains child
 // folders and child requests, forming a nested tree. Order is user-controlled
-// and persisted.
 type FolderNode struct {
 	ID       string         `json:"id"`
 	Name     string         `json:"name"`
+	Position int            `json:"position"`
 	Folders  []FolderNode   `json:"folders"`
 	Requests []SavedRequest `json:"requests"`
 }
@@ -223,31 +224,37 @@ func (a *App) readCollection(id string) (*Collection, error) {
 	if err := json.Unmarshal(data, &c); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", a.collectionPath(id), err)
 	}
-	// Ensure empty slices, not nil, so the JSON never writes "null".
+	// Ensure empty slices, not nil, and sort by Position.
 	if c.Folders == nil {
 		c.Folders = []FolderNode{}
 	}
 	if c.Requests == nil {
 		c.Requests = []SavedRequest{}
 	}
+	sort.SliceStable(c.Requests, func(i, j int) bool { return c.Requests[i].Position < c.Requests[j].Position })
+	normalizeFolderNodes(c.Folders)
 	return &c, nil
 }
 
 func (a *App) writeCollection(c *Collection) error {
-	// Normalize so JSON always writes [] not null.
+	// Normalize so JSON always writes [] not null, and positions are sorted.
 	if c.Folders == nil {
 		c.Folders = []FolderNode{}
 	}
 	if c.Requests == nil {
 		c.Requests = []SavedRequest{}
 	}
+	sort.SliceStable(c.Requests, func(i, j int) bool { return c.Requests[i].Position < c.Requests[j].Position })
 	normalizeFolderNodes(c.Folders)
 	return writeJSONFile(a.collectionPath(c.ID), c)
 }
 
-// normalizeFolderNodes ensures empty slices are written as [] not null.
+// normalizeFolderNodes sorts children by Position and ensures empty slices are
+// written as [] not null.
 func normalizeFolderNodes(folders []FolderNode) {
+	sort.SliceStable(folders, func(i, j int) bool { return folders[i].Position < folders[j].Position })
 	for i := range folders {
+		sort.SliceStable(folders[i].Requests, func(a, b int) bool { return folders[i].Requests[a].Position < folders[i].Requests[b].Position })
 		if folders[i].Folders == nil {
 			folders[i].Folders = []FolderNode{}
 		}
@@ -314,6 +321,7 @@ func (a *App) SaveRequest(collectionID string, req SavedRequest, parentFolderID 
 	if req.ID == "" {
 		req.ID = newID()
 		if parentFolderID == "" {
+			req.Position = len(c.Requests)
 			c.Requests = append(c.Requests, req)
 		} else {
 			if !insertRequestInTree(c, parentFolderID, req) {
@@ -332,6 +340,7 @@ func (a *App) SaveRequest(collectionID string, req SavedRequest, parentFolderID 
 func insertRequestInTree(c *Collection, parentID string, req SavedRequest) bool {
 	for i := range c.Folders {
 		if c.Folders[i].ID == parentID {
+			req.Position = len(c.Folders[i].Requests)
 			c.Folders[i].Requests = append(c.Folders[i].Requests, req)
 			return true
 		}
@@ -344,6 +353,7 @@ func insertRequestInTree(c *Collection, parentID string, req SavedRequest) bool 
 
 func insertRequestInFolder(f *FolderNode, parentID string, req SavedRequest) bool {
 	if f.ID == parentID {
+		req.Position = len(f.Requests)
 		f.Requests = append(f.Requests, req)
 		return true
 	}
@@ -447,6 +457,7 @@ func (a *App) CreateFolder(collectionID, parentFolderID, name string) (*FolderNo
 		Requests: []SavedRequest{},
 	}
 	if parentFolderID == "" {
+		f.Position = len(c.Folders)
 		c.Folders = append(c.Folders, f)
 	} else {
 		if !insertFolderInTree(c, parentFolderID, f) {
@@ -459,6 +470,7 @@ func (a *App) CreateFolder(collectionID, parentFolderID, name string) (*FolderNo
 func insertFolderInTree(c *Collection, parentID string, f FolderNode) bool {
 	for i := range c.Folders {
 		if c.Folders[i].ID == parentID {
+			f.Position = len(c.Folders[i].Folders)
 			c.Folders[i].Folders = append(c.Folders[i].Folders, f)
 			return true
 		}
@@ -471,6 +483,7 @@ func insertFolderInTree(c *Collection, parentID string, f FolderNode) bool {
 
 func insertFolderInFolder(parent *FolderNode, parentID string, f FolderNode) bool {
 	if parent.ID == parentID {
+		f.Position = len(parent.Folders)
 		parent.Folders = append(parent.Folders, f)
 		return true
 	}
@@ -516,6 +529,122 @@ func deleteFolderFromSlice(parent *FolderNode, id string) bool {
 			return true
 		}
 		if deleteFolderFromSlice(&parent.Folders[i], id) {
+			return true
+		}
+	}
+	return false
+}
+
+// MoveRequest changes a request's position within its current parent.
+// newPosition is the target 0-based index; siblings are shifted and renumbered.
+func (a *App) MoveRequest(collectionID, requestID string, newPosition int) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	c, err := a.readCollection(collectionID)
+	if err != nil {
+		return err
+	}
+	if moveRequestInSlice(&c.Requests, requestID, newPosition) {
+		return a.writeCollection(c)
+	}
+	for i := range c.Folders {
+		if moveRequestInFolder(&c.Folders[i], requestID, newPosition) {
+			return a.writeCollection(c)
+		}
+	}
+	return fmt.Errorf("request %s not found in collection %s", requestID, collectionID)
+}
+
+func moveRequestInSlice(reqs *[]SavedRequest, id string, pos int) bool {
+	idx := -1
+	for i, req := range *reqs {
+		if req.ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return false
+	}
+	req := (*reqs)[idx]
+	*reqs = append((*reqs)[:idx], (*reqs)[idx+1:]...)
+	if pos < 0 {
+		pos = 0
+	}
+	if pos > len(*reqs) {
+		pos = len(*reqs)
+	}
+	*reqs = append((*reqs)[:pos], append([]SavedRequest{req}, (*reqs)[pos:]...)...)
+	for i := range *reqs {
+		(*reqs)[i].Position = i
+	}
+	return true
+}
+
+func moveRequestInFolder(f *FolderNode, id string, pos int) bool {
+	if moveRequestInSlice(&f.Requests, id, pos) {
+		return true
+	}
+	for i := range f.Folders {
+		if moveRequestInFolder(&f.Folders[i], id, pos) {
+			return true
+		}
+	}
+	return false
+}
+
+// MoveFolder changes a folder's position within its current parent.
+// newPosition is the target 0-based index; siblings are shifted and renumbered.
+func (a *App) MoveFolder(collectionID, folderID string, newPosition int) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	c, err := a.readCollection(collectionID)
+	if err != nil {
+		return err
+	}
+	if moveFolderInSlice(&c.Folders, folderID, newPosition) {
+		return a.writeCollection(c)
+	}
+	for i := range c.Folders {
+		if moveFolderInFolder(&c.Folders[i], folderID, newPosition) {
+			return a.writeCollection(c)
+		}
+	}
+	return fmt.Errorf("folder %s not found in collection %s", folderID, collectionID)
+}
+
+func moveFolderInSlice(folders *[]FolderNode, id string, pos int) bool {
+	idx := -1
+	for i, f := range *folders {
+		if f.ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return false
+	}
+	f := (*folders)[idx]
+	*folders = append((*folders)[:idx], (*folders)[idx+1:]...)
+	if pos < 0 {
+		pos = 0
+	}
+	if pos > len(*folders) {
+		pos = len(*folders)
+	}
+	*folders = append((*folders)[:pos], append([]FolderNode{f}, (*folders)[pos:]...)...)
+	for i := range *folders {
+		(*folders)[i].Position = i
+	}
+	return true
+}
+
+func moveFolderInFolder(f *FolderNode, id string, pos int) bool {
+	if moveFolderInSlice(&f.Folders, id, pos) {
+		return true
+	}
+	for i := range f.Folders {
+		if moveFolderInFolder(&f.Folders[i], id, pos) {
 			return true
 		}
 	}

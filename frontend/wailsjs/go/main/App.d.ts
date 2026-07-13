@@ -32,6 +32,10 @@ export function ListCollections():Promise<Array<main.Collection>>;
 
 export function ListMockServers():Promise<Array<main.MockServer>>;
 
+export function MoveFolder(arg1:string,arg2:string,arg3:number):Promise<void>;
+
+export function MoveRequest(arg1:string,arg2:string,arg3:number):Promise<void>;
+
 export function RunningMockServers():Promise<Record<string, number>>;
 
 export function SaveEnvironment(arg1:main.Environment):Promise<main.Environment>;

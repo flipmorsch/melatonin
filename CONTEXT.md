@@ -23,10 +23,13 @@ A structured shortcut on a Request for common authentication schemes (bearer tok
 An in-memory store that collects `Set-Cookie` headers from responses and attaches `Cookie` headers to subsequent requests matching the same domain. Lives for the duration of the app session — not persisted to disk. Invisible to the user (no UI), but affects send behavior: two requests to the same host share cookies automatically.
 
 ### Collection
-A named container holding an ordered tree of Folders and Requests, shown in the sidebar. Root-level Requests and Folders are siblings; each Folder may contain child Requests and child Folders. Order is user-controlled via drag-and-drop and persisted.
+A named container holding an ordered tree of Folders and Requests, shown in the sidebar. Root-level Requests and Folders are siblings; each Folder may contain child Requests and child Folders. Order is user-controlled and persisted.
 
 ### Folder
 A named grouping within a Collection, created explicitly by the user. A Folder may contain Requests and child Folders, forming a nested tree. Order is user-controlled and persisted. Deleting a Folder cascades: all descendant Folders and Requests are deleted (with confirmation showing the count).
+
+**Position**:
+The ordinal location of a Request or Folder within its parent's ordered list. Zero-based. When an item is created it gets the last position; reordering shifts siblings to close the gap. Move semantics (to a different parent) are not yet supported.
 
 ### Send Options
 Attached to each Request. Per-Request overrides of how a send behaves: how long to wait, whether redirects are followed, whether TLS certificates are verified. Unset options mean the defaults apply (30s timeout, follow redirects, verify TLS).
