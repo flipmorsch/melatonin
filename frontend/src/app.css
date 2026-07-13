@@ -177,20 +177,6 @@
     transform: rotate(90deg);
 }
 
-/* ---------- tree connector lines ---------- */
-
-.tree-row {
-    position: relative;
-}
-.tree-row::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: -8px;
-    width: 8px;
-    height: 0;
-    border-top: 1px solid color-mix(in srgb, var(--mantine-color-violet-4) 30%, var(--mantine-color-dark-4));
-}
 
 
 /* request log rows: hover shows the row is expandable */
