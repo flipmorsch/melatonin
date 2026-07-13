@@ -1,4 +1,4 @@
-import {ReactNode, useEffect, useRef, useState} from 'react';
+import {ReactNode, useEffect, useRef} from 'react';
 import {
     Accordion, ActionIcon, Badge, Button, Checkbox, Group,
     NativeSelect, NumberInput, PasswordInput, Stack, Tabs, Text, TextInput,
@@ -10,110 +10,32 @@ import {CodeEditor} from '../../components/CodeEditor';
 import {KVEditor, KVRow, newKVRow, rowsFromKV, rowsToKV} from '../../components/KVEditor';
 import {ScriptLog} from '../../components/ScriptLog';
 import {ResponseViewer} from './ResponseViewer';
+import {TabAction, TabState} from '../../hooks/useTabs';
 
 interface Props {
-    /** Currently selected saved request, or null for the scratch editor. */
-    selected: {colId: string, req: main.SavedRequest} | null;
-    /** History entry to load into the scratch editor, or null. */
-    replay: main.HistoryEntry | null;
+    tab: TabState;
+    dispatch: (action: TabAction) => void;
     /** Active environment's variable names, for {{var}} autocomplete. */
     variables: string[];
     /** Persists a request. Called by the debounced auto-save; there is no Save button. */
     onSave: (colId: string, req: main.SavedRequest) => Promise<unknown>;
     /** Called after every send (success or failure) so the history list refreshes. */
     onSent: () => void;
+    /** Set by parent to skip the first auto-save after loading a saved request. */
+    justLoadedRef: React.MutableRefObject<boolean>;
 }
 
-export function RequestView({selected, replay, variables, onSave, onSent}: Props) {
-    const [name, setName] = useState('');
-    const [method, setMethod] = useState('GET');
-    const [url, setUrl] = useState('');
-    const [params, setParams] = useState<KVRow[]>([]);
-    const [headers, setHeaders] = useState<KVRow[]>([]);
-    const [body, setBody] = useState('');
-    const [authType, setAuthType] = useState('');
-    const [authToken, setAuthToken] = useState('');
-    const [authUser, setAuthUser] = useState('');
-    const [authPass, setAuthPass] = useState('');
-    const [timeoutSec, setTimeoutSec] = useState<number | string>(0);
-    const [noRedirects, setNoRedirects] = useState(false);
-    const [skipTls, setSkipTls] = useState(false);
-    const [preScript, setPreScript] = useState('');
-    const [postScript, setPostScript] = useState('');
-    const [open, setOpen] = useState<string[]>([]);
+export function RequestView({tab, dispatch, variables, onSave, onSent, justLoadedRef}: Props) {
+    // Flush pending debounced save on unmount
+    const pendingRef = useRef<{timer: number; colId: string; req: main.SavedRequest} | null>(null);
+    useEffect(() => () => {
+        if (pendingRef.current) {
+            clearTimeout(pendingRef.current.timer);
+            onSave(pendingRef.current.colId, pendingRef.current.req).catch(console.error);
+        }
+    }, []);
 
-    const [response, setResponse] = useState<main.ResponseData | null>(null);
-    const [error, setError] = useState('');
-    const [sending, setSending] = useState(false);
-    const [saveState, setSaveState] = useState<'saved' | 'dirty' | 'saving'>('saved');
-
-    /** Debounced auto-save not yet written to disk. */
-    const pending = useRef<{timer: number, colId: string, req: main.SavedRequest} | null>(null);
-    /** Set by loadFields so the field-change effect skips the load itself. */
-    const justLoaded = useRef(false);
-
-    /** Writes any pending edit immediately — before switching requests or unmounting,
-     * so mid-debounce keystrokes are never lost. */
-    function flushPending() {
-        if (!pending.current) return;
-        clearTimeout(pending.current.timer);
-        const {colId, req} = pending.current;
-        pending.current = null;
-        // switching away — this view's error strip is gone, so failures go to the console
-        onSave(colId, req).catch(console.error);
-    }
-
-    /** Fills the editor from a saved request or a history entry's request.
-     * Non-empty sections start expanded, empty ones collapsed. */
-    function loadFields(r: main.SavedRequest | main.RequestInput) {
-        justLoaded.current = true;
-        setMethod(r.method);
-        setUrl(r.url);
-        setParams(rowsFromKV(r.params));
-        setHeaders(rowsFromKV(r.headers));
-        setBody(r.body);
-        setAuthType(r.auth?.type ?? '');
-        setAuthToken(r.auth?.token ?? '');
-        setAuthUser(r.auth?.username ?? '');
-        setAuthPass(r.auth?.password ?? '');
-        setTimeoutSec(r.options?.timeoutSec || 0);
-        setNoRedirects(r.options?.noFollowRedirects ?? false);
-        setSkipTls(r.options?.skipTlsVerify ?? false);
-        setPreScript(r.preRequestScript ?? '');
-        setPostScript(r.postResponseScript ?? '');
-        setOpen([
-            ...(r.params?.length ? ['params'] : []),
-            ...(r.headers?.length || r.auth?.type ? ['headers'] : []),
-            ...(r.body ? ['body'] : []),
-            ...(r.options?.timeoutSec || r.options?.noFollowRedirects || r.options?.skipTlsVerify
-                ? ['options'] : []),
-            ...('preRequestScript' in r && (r as main.SavedRequest).preRequestScript ? ['pre-script'] : []),
-            ...('postResponseScript' in r && (r as main.SavedRequest).postResponseScript ? ['post-script'] : []),
-        ]);
-    }
-
-    useEffect(() => {
-        flushPending();
-        if (!selected) return;
-        setName(selected.req.name);
-        loadFields(selected.req);
-        setResponse(null);
-        setError('');
-    }, [selected?.req.id]);
-
-    // flush on unmount (e.g. switching to the environments or mock view)
-    useEffect(() => flushPending, []);
-
-    useEffect(() => {
-        if (!replay) return;
-        setName('');
-        loadFields(replay.request);
-        setResponse(replay.response ?? null);
-        setError(replay.error ?? '');
-    }, [replay?.id]);
-
-    // Ctrl+Enter / Cmd+Enter sends the request from anywhere in the view.
-    // Ref avoids stale closure: the listener is registered once but always calls latest send().
+    // Ctrl+Enter / Cmd+Enter sends the request.
     const sendRef = useRef(send);
     sendRef.current = send;
     useEffect(() => {
@@ -127,6 +49,21 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
         return () => window.removeEventListener('keydown', onKey);
     }, []);
 
+    // ── Derived helpers ──
+
+    const {
+        name, method, url, params, headers, body,
+        authType, authToken, authUser, authPass,
+        timeoutSec, noRedirects, skipTls,
+        preScript, postScript, open,
+        response, error, sending, saveState,
+        type, colId, reqId,
+    } = tab;
+
+    function u(field: string, value: unknown) {
+        dispatch({type: 'UPDATE_FIELD', field, value});
+    }
+
     const auth = (): main.Auth =>
         ({type: authType, token: authToken, username: authUser, password: authPass});
 
@@ -139,19 +76,19 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
     const optionsCount =
         (Number(timeoutSec) > 0 ? 1 : 0) + (noRedirects ? 1 : 0) + (skipTls ? 1 : 0);
 
-    // debounced auto-save: any edit to a saved request persists after 600ms of quiet
+    // ── Auto-save (debounced, 600ms after last edit) ──
+
     useEffect(() => {
-        if (!selected) return;
-        if (justLoaded.current) {
-            justLoaded.current = false;
-            setSaveState('saved');
+        if (type !== 'saved' || !colId || !reqId) return;
+        if (justLoadedRef.current) {
+            justLoadedRef.current = false;
+            dispatch({type: 'SET_SAVE_STATE', saveState: 'saved'});
             return;
         }
-        setSaveState('dirty');
-        if (pending.current) clearTimeout(pending.current.timer);
-        const colId = selected.colId;
+        dispatch({type: 'SET_SAVE_STATE', saveState: 'dirty'});
+        if (pendingRef.current) clearTimeout(pendingRef.current.timer);
         const req = main.SavedRequest.createFrom({
-            id: selected.req.id,
+            id: reqId,
             name,
             method,
             url,
@@ -163,20 +100,21 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
             preRequestScript: preScript,
             postResponseScript: postScript,
         });
-        setSaveState('saving');
+        dispatch({type: 'SET_SAVE_STATE', saveState: 'saving'});
         const timer = window.setTimeout(() => {
-            pending.current = null;
+            pendingRef.current = null;
             onSave(colId, req)
-                .then(() => setSaveState('saved'))
-                .catch(e => setError(String(e)));
+                .then(() => dispatch({type: 'SET_SAVE_STATE', saveState: 'saved'}))
+                .catch(e => dispatch({type: 'SET_ERROR', error: String(e)}));
         }, 600);
+        pendingRef.current = {timer, colId, req};
     }, [name, method, url, params, headers, body,
         authType, authToken, authUser, authPass, timeoutSec, noRedirects, skipTls, preScript, postScript]);
 
     async function send() {
-        setSending(true);
-        setError('');
-        setResponse(null);
+        dispatch({type: 'SET_SENDING', sending: true});
+        dispatch({type: 'SET_ERROR', error: ''});
+        dispatch({type: 'SET_RESPONSE', response: null});
         try {
             const resp = await SendRequest(main.RequestInput.createFrom({
                 method,
@@ -189,32 +127,32 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                 preRequestScript: preScript,
                 postResponseScript: postScript,
             }));
-            setResponse(resp);
+            dispatch({type: 'SET_RESPONSE', response: resp});
             // Auto-expand script items when logs came back
             if (resp.preScriptLog?.trim() || resp.postScriptLog?.trim()) {
-                setOpen(o => {
-                    const next = [...o];
-                    if (resp.preScriptLog?.trim() && !next.includes('pre-script')) next.push('pre-script');
-                    if (resp.postScriptLog?.trim() && !next.includes('post-script')) next.push('post-script');
-                    return next;
-                });
+                const next = [...open];
+                if (resp.preScriptLog?.trim() && !next.includes('pre-script')) next.push('pre-script');
+                if (resp.postScriptLog?.trim() && !next.includes('post-script')) next.push('post-script');
+                dispatch({type: 'SET_ACCORDION', open: next});
             }
         } catch (e) {
-            setError(String(e));
+            dispatch({type: 'SET_ERROR', error: String(e)});
         } finally {
-            setSending(false);
+            dispatch({type: 'SET_SENDING', sending: false});
             onSent();
         }
     }
 
     function addRow(section: 'params' | 'headers') {
-        setOpen(o => o.includes(section) ? o : [...o, section]);
-        (section === 'params' ? setParams : setHeaders)(rows => [...rows, newKVRow()]);
+        const key = section === 'params' ? 'params' : 'headers';
+        const rows = section === 'params' ? params : headers;
+        if (!open.includes(key)) u('open', [...open, key]);
+        u(key, [...rows, newKVRow()]);
     }
 
     function formatBody() {
         try {
-            setBody(JSON.stringify(JSON.parse(body), null, 2));
+            u('body', JSON.stringify(JSON.parse(body), null, 2));
         } catch {
             // invalid JSON — the editor's lint underline points at the problem
         }
@@ -225,7 +163,6 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
     /** Accordion header with a count badge and an action beside the control. */
     const sectionControl = (label: string, count: number, extra?: ReactNode, action?: ReactNode) => (
         <Group gap={0} wrap="nowrap">
-            {/* Control defaults to width:100%, which squeezes the action out of the row */}
             <Accordion.Control style={{flex: 1, width: 'auto', minWidth: 0}}>
                 <Group gap="xs">
                     {label}
@@ -249,11 +186,11 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                 <TextInput
                     style={{flex: 1}}
                     value={name}
-                    onChange={e => setName(e.target.value)}
-                    placeholder={selected ? 'Request name' : 'Unsaved scratch request'}
-                    disabled={!selected}
+                    onChange={e => u('name', e.target.value)}
+                    placeholder={type === 'saved' ? 'Request name' : 'Unsaved scratch request'}
+                    disabled={type !== 'saved'}
                 />
-                {selected && saveState !== 'saved' &&
+                {type === 'saved' && saveState !== 'saved' &&
                     <Text size="xs" ff="monospace" c={saveState === 'saving' ? 'dark.2' : 'yellow.4'}
                         title={saveState === 'saving' ? 'Saving…' : 'Modified'}
                         style={{flexShrink: 0, userSelect: 'none'}}>
@@ -267,7 +204,7 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                         w={110}
                         className="mono-input"
                         value={method}
-                        onChange={e => setMethod(e.target.value)}
+                        onChange={e => u('method', e.target.value)}
                         data={METHODS}
                         aria-label="HTTP method"
                     />
@@ -275,7 +212,7 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                         style={{flex: 1}}
                         className="mono-input"
                         value={url}
-                        onChange={e => setUrl(e.target.value)}
+                        onChange={e => u('url', e.target.value)}
                         placeholder="https://api.example.com/path or {{baseUrl}}/path"
                         autoFocus
                         aria-label="Request URL"
@@ -313,13 +250,13 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                 </Tabs.List>
 
                 <Tabs.Panel value="request" style={{flex: 1, minHeight: 0, overflow: 'auto'}} pt="sm">
-                    <Accordion multiple value={open} onChange={setOpen} variant="separated"
+                    <Accordion multiple value={open} onChange={v => u('open', v)} variant="separated"
                         styles={{label: {paddingTop: 8, paddingBottom: 8}}}>
                         <Accordion.Item value="params">
                             {sectionControl('Query Params', rowsToKV(params).length, undefined, addIcon('params'))}
                             <Accordion.Panel>
                                 <KVEditor
-                                    rows={params} onChange={setParams}
+                                    rows={params} onChange={v => u('params', v)}
                                     keyPlaceholder="page" valuePlaceholder="2 or {{term}}"
                                 />
                             </Accordion.Panel>
@@ -336,7 +273,7 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                                             w={140}
                                             size="xs"
                                             value={authType}
-                                            onChange={e => setAuthType(e.target.value)}
+                                            onChange={e => u('authType', e.target.value)}
                                             data={[
                                                 {value: '', label: 'No auth'},
                                                 {value: 'bearer', label: 'Bearer token'},
@@ -347,26 +284,26 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                                             <TextInput
                                                 style={{flex: 1}} size="xs" className="mono-input"
                                                 value={authToken}
-                                                onChange={e => setAuthToken(e.target.value)}
+                                                onChange={e => u('authToken', e.target.value)}
                                                 placeholder="Token (or {{token}})"
                                             />}
                                         {authType === 'basic' && <>
                                             <TextInput
                                                 style={{flex: 1}} size="xs" className="mono-input"
                                                 value={authUser}
-                                                onChange={e => setAuthUser(e.target.value)}
+                                                onChange={e => u('authUser', e.target.value)}
                                                 placeholder="Username"
                                             />
                                             <PasswordInput
                                                 style={{flex: 1}} size="xs" className="mono-input"
                                                 value={authPass}
-                                                onChange={e => setAuthPass(e.target.value)}
+                                                onChange={e => u('authPass', e.target.value)}
                                                 placeholder="Password"
                                             />
                                         </>}
                                     </Group>
                                     <KVEditor
-                                        rows={headers} onChange={setHeaders}
+                                        rows={headers} onChange={v => u('headers', v)}
                                         keyPlaceholder="X-Request-Id" valuePlaceholder="abc"
                                         deadTitle={row =>
                                             authType && row.key.trim().toLowerCase() === 'authorization'
@@ -386,9 +323,9 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                                         onClick={formatBody}>Format</Button>)}
                                 <Accordion.Panel>
                                     <CodeEditor
-                                        key={selected?.req.id ?? 'scratch'}
+                                        key={tab.tabId + '-body'}
                                         value={body}
-                                        onChange={setBody}
+                                        onChange={v => u('body', v)}
                                         json={looksJson(body)}
                                         variables={variables}
                                         placeholder="Request body"
@@ -404,7 +341,7 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                                         w={150} size="xs" className="mono-input"
                                         min={0} max={600} allowDecimal={false}
                                         value={timeoutSec || ''}
-                                        onChange={setTimeoutSec}
+                                        onChange={v => u('timeoutSec', v)}
                                         placeholder="30"
                                         label="Timeout (s)"
                                         styles={{root: {display: 'flex', alignItems: 'center', gap: 8}}}
@@ -413,13 +350,13 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                                         size="xs"
                                         label="Don't follow redirects"
                                         checked={noRedirects}
-                                        onChange={e => setNoRedirects(e.currentTarget.checked)}
+                                        onChange={e => u('noRedirects', e.currentTarget.checked)}
                                     />
                                     <Checkbox
                                         size="xs"
                                         label="Skip TLS verify"
                                         checked={skipTls}
-                                        onChange={e => setSkipTls(e.currentTarget.checked)}
+                                        onChange={e => u('skipTls', e.currentTarget.checked)}
                                     />
                                 </Group>
                             </Accordion.Panel>
@@ -428,7 +365,7 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                 </Tabs.Panel>
 
                 <Tabs.Panel value="scripts" style={{flex: 1, minHeight: 0, overflow: 'auto'}} pt="sm">
-                    <Accordion multiple value={open} onChange={setOpen} variant="separated"
+                    <Accordion multiple value={open} onChange={v => u('open', v)} variant="separated"
                         styles={{label: {paddingTop: 8, paddingBottom: 8}}}>
                         <Accordion.Item value="pre-script">
                             {sectionControl('Pre-request script', 0,
@@ -439,9 +376,9 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                                         Runs before the HTTP call. Mutate <Text component="code" size="sm" fw={600} c="dark.0">request</Text> to change what gets sent.
                                     </Text>
                                     <CodeEditor
-                                        key={(selected?.req.id ?? 'scratch') + '-pre'}
+                                        key={tab.tabId + '-pre'}
                                         value={preScript}
-                                        onChange={setPreScript}
+                                        onChange={v => u('preScript', v)}
                                         placeholder={'// Set headers, rewrite the body, change the method…'}
                                         variables={variables}
                                         scriptApi
@@ -463,9 +400,9 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                                         or call <Text component="code" size="sm" fw={600} c="dark.0">env.set("name", value)</Text> to extract values.
                                     </Text>
                                     <CodeEditor
-                                        key={(selected?.req.id ?? 'scratch') + '-post'}
+                                        key={tab.tabId + '-post'}
                                         value={postScript}
-                                        onChange={setPostScript}
+                                        onChange={v => u('postScript', v)}
                                         placeholder={'// Inspect the response, set session variables…'}
                                         variables={variables}
                                         scriptApi

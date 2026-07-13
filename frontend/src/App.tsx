@@ -11,6 +11,9 @@ import {useCollections} from './hooks/useCollections';
 import {useEnvironments} from './hooks/useEnvironments';
 import {useHistory} from './hooks/useHistory';
 import {useMocks} from './hooks/useMocks';
+import {useTabs} from './hooks/useTabs';
+import {TabStrip} from './features/tabs/TabStrip';
+import {TabCloseModal} from './features/tabs/TabCloseModal';
 import {CommandPalette, PaletteItem} from './components/CommandPalette';
 import {MethodBadge} from './components/MethodBadge';
 import {RunDot} from './components/RunDot';
@@ -24,8 +27,6 @@ function App() {
     const hist = useHistory();
 
     const [view, setView] = useState<View>('request');
-    const [selected, setSelected] = useState<{colId: string, req: main.SavedRequest} | null>(null);
-    const [replay, setReplay] = useState<main.HistoryEntry | null>(null);
     const [histDetail, setHistDetail] = useState<main.HistoryEntry | null>(null);
     const [selectedMockId, setSelectedMockId] = useState('');
     const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
@@ -37,12 +38,53 @@ function App() {
         return saved ? Math.max(180, Math.min(500, Number(saved))) : 260;
     });
 
+    // ── Tabs ──
+    const {state: tabsState, active, dispatch: tabDispatch,
+        pendingRef, justLoadedRef, flushPending, isDirty} = useTabs();
+    const [closeModal, setCloseModal] = useState<{idx: number} | null>(null);
+
+    function selectTab(idx: number) {
+        if (idx === tabsState.activeIdx) return;
+        if (tabsState.activeIdx >= 0 && tabsState.tabs[tabsState.activeIdx]?.type === 'saved') {
+            flushPending(cols.saveRequest);
+        }
+        tabDispatch({type: 'SET_ACTIVE', idx});
+    }
+
+    function requestCloseTab(idx: number) {
+        if (tabsState.tabs[idx]?.type === 'scratch') return;
+        if (isDirty(idx)) {
+            setCloseModal({idx});
+        } else {
+            closeTab(idx);
+        }
+    }
+
+    function closeTab(idx: number) {
+        if (idx === tabsState.activeIdx && tabsState.tabs[idx]?.type === 'saved') {
+            flushPending(cols.saveRequest);
+        }
+        tabDispatch({type: 'CLOSE_TAB', tabIdx: idx});
+    }
+
+    function handleCloseSave() {
+        const idx = closeModal!.idx;
+        closeTab(idx);
+        setCloseModal(null);
+    }
+
+    function handleCloseDiscard() {
+        const idx = closeModal!.idx;
+        closeTab(idx);
+        setCloseModal(null);
+    }
+
+    // ── Shared data ──
     const environments = envs.envSet?.environments ?? [];
     const variables = Object.keys(
         environments.find(e => e.id === envs.envSet?.activeId)?.variables ?? {});
     const selectedMock = mocks.mocks.find(m => m.id === selectedMockId);
 
-    /** Runs a sidebar/topbar action, surfacing failures in the shell error strip. */
     const run = (p: Promise<unknown>) => {
         setShellError('');
         p.catch(e => setShellError(String(e)));
@@ -51,7 +93,6 @@ function App() {
     // ── Sidebar resize ──
     const sidebarWidthRef = useRef(sidebarWidth);
     useEffect(() => { sidebarWidthRef.current = sidebarWidth; }, [sidebarWidth]);
-
     const handleResizeStart = useCallback((e: React.MouseEvent) => {
         e.preventDefault();
         const navbar = (e.currentTarget as HTMLElement).closest('.mantine-AppShell-navbar') as HTMLElement | null;
@@ -76,7 +117,7 @@ function App() {
         document.body.style.userSelect = 'none';
     }, []);
 
-    // Ctrl+K / Cmd+K opens the command palette
+    // ── Keyboard shortcuts ──
     useEffect(() => {
         function onKey(e: KeyboardEvent) {
             if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -88,55 +129,44 @@ function App() {
         return () => window.removeEventListener('keydown', onKey);
     }, []);
 
+    // ── Command palette ──
     const paletteItems: PaletteItem[] = useMemo(() => {
         const out: PaletteItem[] = [];
-        const addReqs = (col: main.Collection, reqs: main.SavedRequest[]) => {
-            for (const req of reqs) {
-                out.push({
-                    id: `req:${req.id}`,
-                    label: req.name,
-                    detail: col.name,
-                    left: <MethodBadge method={req.method}/>,
-                    onSelect: () => selectRequest(col.id, req),
-                });
-            }
-        };
-        const walkFolders = (col: main.Collection, folders: main.FolderNode[]) => {
-            for (const f of folders) {
-                addReqs(col, f.requests);
-                walkFolders(col, f.folders);
-            }
-        };
         for (const col of cols.collections) {
-            addReqs(col, col.requests);
-            walkFolders(col, col.folders);
-        }
-        for (const m of mocks.mocks) {
-            const port = mocks.running[m.id];
-            out.push({
-                id: `mock:${m.id}`,
-                label: m.name,
-                detail: port ? `Running on :${port}` : `Port ${m.port}`,
-                left: <RunDot on={port !== undefined}/>,
-                onSelect: () => selectMock(m),
-            });
-            for (const r of (m.routes ?? [])) {
+            function addReq(item: any, prefix: string) {
                 out.push({
-                    id: `route:${r.id}`,
-                    label: r.path,
-                    detail: `${m.name} · ${r.status}`,
-                    left: <MethodBadge method={r.method}/>,
-                    onSelect: () => selectRoute(m, r.id),
+                    id: `req:${item.id}`,
+                    label: `${item.method} ${item.name || item.url}`,
+                    detail: prefix,
+                    left: <MethodBadge method={item.method}/>,
+                    onSelect: () => selectRequest(col.id, item),
                 });
             }
+            for (const item of col.requests ?? []) addReq(item, col.name);
+            for (const folder of col.folders ?? []) {
+                function walk(f: any, prefix: string) {
+                    for (const item of f.requests ?? []) addReq(item, `${prefix} › ${f.name}`);
+                    for (const sub of f.folders ?? []) walk(sub, `${prefix} › ${f.name}`);
+                }
+                walk(folder, col.name);
+            }
         }
-        for (const e of hist.entries.slice(0, 30)) {
+        for (const e of hist.entries) {
             out.push({
                 id: `hist:${e.id}`,
                 label: e.request.url.split('?')[0],
                 detail: `${e.request.method} · ${new Date(e.time).toLocaleTimeString()}`,
                 left: <MethodBadge method={e.request.method}/>,
                 onSelect: () => openHistoryInEditor(e),
+            });
+        }
+        for (const m of mocks.mocks) {
+            out.push({
+                id: `mock:${m.id}`,
+                label: m.name,
+                detail: `Port ${m.port}${mocks.running[m.id] ? ' · running' : ''}`,
+                left: <RunDot on={!!mocks.running[m.id]}/>,
+                onSelect: () => selectMock(m),
             });
         }
         for (const env of environments) {
@@ -150,10 +180,11 @@ function App() {
         return out;
     }, [cols.collections, mocks.mocks, mocks.running, hist.entries, environments]);
 
+    // ── Sidebar / tab actions ──
     function selectRequest(colId: string, req: main.SavedRequest) {
-        setSelected({colId, req});
-        setReplay(null);
+        justLoadedRef.current = true;
         setView('request');
+        tabDispatch({type: 'OPEN_SAVED', colId, req});
     }
 
     function selectHistory(e: main.HistoryEntry) {
@@ -162,9 +193,9 @@ function App() {
     }
 
     function openHistoryInEditor(e: main.HistoryEntry) {
-        setSelected(null);
-        setReplay(e);
+        justLoadedRef.current = true;
         setView('request');
+        tabDispatch({type: 'OPEN_HISTORY', entry: e});
     }
 
     async function addRequest(colId: string, parentFolderId?: string) {
@@ -215,6 +246,14 @@ function App() {
         })));
     }
 
+    // ── selectedReqId for sidebar highlight ──
+    const selectedReqId = view === 'request' && active?.type === 'saved'
+        ? active.reqId ?? null : null;
+
+    // ── selectedHistoryId for sidebar highlight ──
+    const selectedHistoryId = view === 'history' ? histDetail?.id ?? null
+        : view === 'request' && active?.type === 'history' ? active.histId ?? null : null;
+
     return (
         <AppShell header={{height: 52}} navbar={{width: sidebarCollapsed ? 48 : sidebarWidth, breakpoint: 0}} padding="md">
             <AppShell.Header className="topbar" withBorder={false} px="md">
@@ -244,27 +283,24 @@ function App() {
                 <Box style={{position: 'relative', height: '100%'}}>
                     <Sidebar
                         collapsed={sidebarCollapsed}
-                        onToggleCollapse={() => setSidebarCollapsed(c => { const n = !c; localStorage.setItem('sidebarCollapsed', String(n)); return n; })}
+                        onToggleCollapse={() => setSidebarCollapsed(c => {
+                            const n = !c; localStorage.setItem('sidebarCollapsed', String(n)); return n;
+                        })}
                         collections={cols.collections}
-                        selectedReqId={view === 'request' ? selected?.req.id ?? null : null}
+                        selectedReqId={selectedReqId}
                         onSelectRequest={selectRequest}
                         onCreateCollection={name => run(cols.create(name))}
-                        onDeleteCollection={id => {
-                            if (selected?.colId === id) setSelected(null);
-                            run(cols.remove(id));
-                        }}
-                        onCreateFolder={(colId: string, parentId: string, name: string) =>
+                        onDeleteCollection={id => run(cols.remove(id))}
+                        onCreateFolder={(colId, parentId, name) =>
                             cols.createFolder(colId, parentId, name)}
-                        onDeleteFolder={(colId: string, folderId: string) =>
+                        onDeleteFolder={(colId, folderId) =>
                             cols.removeFolder(colId, folderId)}
-                        onCountFolder={(colId: string, folderId: string) =>
+                        onCountFolder={(colId, folderId) =>
                             cols.countFolder(colId, folderId)}
-                        onAddRequest={(colId: string, parentFolderId?: string) =>
+                        onAddRequest={(colId, parentFolderId?) =>
                             run(addRequest(colId, parentFolderId))}
-                        onDeleteRequest={(colId, reqId) => {
-                            if (selected?.req.id === reqId) setSelected(null);
-                            run(cols.removeRequest(colId, reqId));
-                        }}
+                        onDeleteRequest={(colId, reqId) =>
+                            run(cols.removeRequest(colId, reqId))}
                         onReorderRequest={(colId, reqId, newParentID, newPos) =>
                             run(cols.reorderRequest(colId, reqId, newParentID, newPos))}
                         onReorderFolder={(colId, folderId, newParentID, newPos) =>
@@ -287,26 +323,20 @@ function App() {
                         onAddRoute={m => run(addRoute(m))}
                         onDeleteRoute={deleteRoute}
                         history={hist.entries}
-                        selectedHistoryId={
-                            view === 'history' ? histDetail?.id ?? null
-                            : view === 'request' && !selected ? replay?.id ?? null : null}
+                        selectedHistoryId={selectedHistoryId}
                         onSelectHistory={selectHistory}
                         onClearHistory={() => {
-                            setReplay(null);
                             setHistDetail(null);
                             if (view === 'history') setView('request');
                             run(hist.clear());
                         }}
                     />
                     {!sidebarCollapsed && (
-                        <Box
-                            onMouseDown={handleResizeStart}
-                            style={{
-                                position: 'absolute', right: -2, top: 0, bottom: 0,
-                                width: 5, cursor: 'col-resize', zIndex: 10,
-                                background: 'transparent',
-                            }}
-                        />
+                        <Box onMouseDown={handleResizeStart} style={{
+                            position: 'absolute', right: -2, top: 0, bottom: 0,
+                            width: 5, cursor: 'col-resize', zIndex: 10,
+                            background: 'transparent',
+                        }}/>
                     )}
                 </Box>
             </AppShell.Navbar>
@@ -315,9 +345,23 @@ function App() {
                 {shellError &&
                     <Text size="sm" ff="monospace" c="red.4" mb="xs">{shellError}</Text>}
                 {view === 'request' &&
-                    <RequestView selected={selected} replay={replay}
-                        variables={variables} onSave={(colId, req) => cols.saveRequest(colId, req)}
-                        onSent={() => hist.reload().catch(console.error)}/>}
+                    <TabStrip
+                        tabs={tabsState.tabs}
+                        activeIdx={tabsState.activeIdx}
+                        onSelect={selectTab}
+                        onClose={requestCloseTab}
+                        onNewScratch={() => tabDispatch({type: 'OPEN_SCRATCH'})}
+                    />}
+                {view === 'request' && active &&
+                    <RequestView
+                        key={active.tabId}
+                        tab={active}
+                        dispatch={tabDispatch}
+                        variables={variables}
+                        onSave={(colId, req) => cols.saveRequest(colId, req)}
+                        onSent={() => hist.reload().catch(console.error)}
+                        justLoadedRef={justLoadedRef}
+                    />}
                 {view === 'environments' &&
                     <EnvironmentsView envSet={envs.envSet} onSave={envs.save} onDelete={envs.remove}/>}
                 {view === 'history' && histDetail &&
@@ -335,8 +379,17 @@ function App() {
                     />}
             </AppShell.Main>
             <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={paletteItems}/>
+            {closeModal && (
+                <TabCloseModal
+                    open={true}
+                    tabName={tabsState.tabs[closeModal.idx]?.name ?? ''}
+                    onSave={handleCloseSave}
+                    onDiscard={handleCloseDiscard}
+                    onCancel={() => setCloseModal(null)}
+                />
+            )}
         </AppShell>
     );
 }
 
-export default App
+export default App;
