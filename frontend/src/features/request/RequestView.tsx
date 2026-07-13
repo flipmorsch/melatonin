@@ -401,47 +401,41 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                         </>
                     )}
                     <Accordion.Panel>
-                        {!preScript && !postScript ? (
-                            <Text size="xs" c="dark.2" py="sm">
-                                Add JavaScript to transform the request before sending
-                                or extract values from the response into session variables.
+                        {!preScript && !postScript && (
+                            <Text size="xs" c="dark.2" pb="xs">
+                                Scripts run in an embedded JavaScript runtime.
+                                Pre-request: mutate <Text component="code" size="xs" fw={600} c="dark.1">request</Text> before sending.
+                                Post-response: read <Text component="code" size="xs" fw={600} c="dark.1">response</Text>, call <Text component="code" size="xs" fw={600} c="dark.1">env.set()</Text>.
                             </Text>
-                        ) : (
-                            <>
-                                {preScript ? (
-                                    <Stack gap="xs">
-                                        <SectionLabel>Pre-request script</SectionLabel>
-                                        <CodeEditor
-                                            key={(selected?.req.id ?? 'scratch') + '-pre'}
-                                            value={preScript}
-                                            onChange={setPreScript}
-                                            placeholder={'// Runs before the HTTP call — mutate `request`'}
-                                            variables={variables}
-                                            minHeight={56}
-                                        />
-                                        {response?.preScriptLog && response.preScriptLog.trim() ? (
-                                            <ScriptLog text={response.preScriptLog}/>
-                                        ) : null}
-                                    </Stack>
-                                ) : null}
-                                {postScript ? (
-                                    <Stack gap="xs" mt={preScript ? 'md' : 0}>
-                                        <SectionLabel>Post-response script</SectionLabel>
-                                        <CodeEditor
-                                            key={(selected?.req.id ?? 'scratch') + '-post'}
-                                            value={postScript}
-                                            onChange={setPostScript}
-                                            placeholder={'// Runs after the response — mutate `response`, call `env.set()`'}
-                                            variables={variables}
-                                            minHeight={56}
-                                        />
-                                        {response?.postScriptLog && response.postScriptLog.trim() ? (
-                                            <ScriptLog text={response.postScriptLog}/>
-                                        ) : null}
-                                    </Stack>
-                                ) : null}
-                            </>
                         )}
+                        <Stack gap="xs">
+                            <SectionLabel>Pre-request script</SectionLabel>
+                            <CodeEditor
+                                key={(selected?.req.id ?? 'scratch') + '-pre'}
+                                value={preScript}
+                                onChange={setPreScript}
+                                placeholder={'// Runs before the HTTP call — mutate `request`'}
+                                variables={variables}
+                                minHeight={56}
+                            />
+                            {response?.preScriptLog && response.preScriptLog.trim() ? (
+                                <ScriptLog text={response.preScriptLog}/>
+                            ) : null}
+                        </Stack>
+                        <Stack gap="xs" mt="md">
+                            <SectionLabel>Post-response script</SectionLabel>
+                            <CodeEditor
+                                key={(selected?.req.id ?? 'scratch') + '-post'}
+                                value={postScript}
+                                onChange={setPostScript}
+                                placeholder={'// Runs after the response — mutate `response`, call `env.set()`'}
+                                variables={variables}
+                                minHeight={56}
+                            />
+                            {response?.postScriptLog && response.postScriptLog.trim() ? (
+                                <ScriptLog text={response.postScriptLog}/>
+                            ) : null}
+                        </Stack>
                     </Accordion.Panel>
                 </Accordion.Item>
             </Accordion>
