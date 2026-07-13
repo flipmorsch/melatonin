@@ -8,8 +8,7 @@ import {
     DragStartEvent,
     KeyboardSensor,
     PointerSensor,
-    closestCorners,
-    useDroppable,
+    closestCenter,
     useSensor,
     useSensors,
 } from '@dnd-kit/core';
@@ -65,32 +64,21 @@ function SortableFolderRow({folder, colId, depth, collapsed, onToggle, selectedR
     const {
         attributes,
         listeners,
-        setNodeRef: setSortableRef,
+        setNodeRef,
         setActivatorNodeRef,
         transform,
         transition,
         isDragging,
     } = useSortable({id: folder.id});
 
-    const {setNodeRef: setDroppableRef, isOver} = useDroppable({id: `droppable:${colId}:${folder.id}`});
-
-    // Combine both refs so the same element is sortable AND droppable.
-    const setNodeRef = useRef((node: HTMLElement | null) => {
-        setSortableRef(node);
-        setDroppableRef(node);
-    }).current;
-
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.3 : undefined,
-        ...(isOver ? {
-            boxShadow: 'inset 0 0 0 2px var(--mantine-color-violet-4)',
-            borderRadius: 'var(--mantine-radius-sm)',
-        } : {}),
     };
 
     const isCollapsed = collapsed;
+
     return (
         <Box ref={setNodeRef} style={style}>
             <Group gap={2} px="xs" className="hover-row" wrap="nowrap"
@@ -185,71 +173,66 @@ export function CollectionsSection(p: Props) {
         setActiveId(event.active.id as string);
     }
 
+
     function handleDragEnd(event: DragEndEvent) {
         setActiveId(null);
         const {active, over} = event;
         if (!over || active.id === over.id) return;
 
+        const activeId = active.id as string;
         const overId = over.id as string;
 
-        // Dropping onto a folder → reparent into that folder.
-        if (overId.startsWith('droppable:')) {
-            const [, colId, folderId] = overId.split(':');
-            const activeStr = active.id as string;
-            // Determine if it's a request or folder.
-            const col = p.collections.find(c => c.id === colId);
-            if (!col) return;
-            if (isRequest(col, activeStr)) {
-                p.onReorderRequest(colId, activeStr, folderId, 0);
+        // Find which collection contains the active item.
+        const col = findOwningCollection(p.collections, activeId);
+        if (!col) return;
+
+        // If dropping ON a folder → reparent INTO it at position 0.
+        const overFolder = findFolder(col, overId);
+        if (overFolder) {
+            if (isRequest(col, activeId)) {
+                p.onReorderRequest(col.id, activeId, overFolder.id, 0);
             } else {
-                p.onReorderFolder(colId, activeStr, folderId, 0);
+                p.onReorderFolder(col.id, activeId, overFolder.id, 0);
             }
             return;
         }
 
-        // Normal reorder within parent.
-        const container = active.data.current?.sortable?.containerId;
-        if (!container) return;
+        // Normal sortable-to-sortable drop.
+        const activeContainer = active.data.current?.sortable?.containerId;
+        const overContainer = over.data.current?.sortable?.containerId;
+        if (!activeContainer || !overContainer) return;
+        const [overKind, overParent] = overContainer.split(':');
 
-        const [kind, parentId] = container.split(':');
-        const col = p.collections.find(c => {
-            if (parentId === 'root') {
-                if (kind === 'reqs') return c.requests.some(r => r.id === active.id);
-                return c.folders.some(f => f.id === active.id);
-            }
-            return containsItem(c, parentId, active.id as string, kind as 'reqs' | 'folders');
-        });
-        if (!col) return;
-
-        let ids: string[];
-        if (kind === 'reqs') {
-            if (parentId === 'root') {
-                ids = col.requests.map(r => r.id);
-            } else {
-                const f = findFolder(col, parentId);
-                if (!f) return;
-                ids = f.requests.map(r => r.id);
-            }
-        } else {
-            if (parentId === 'root') {
-                ids = col.folders.map(f => f.id);
-            } else {
-                const f = findFolder(col, parentId);
-                if (!f) return;
-                ids = f.folders.map(f2 => f2.id);
-            }
-        }
-
-        const newPos = ids.indexOf(overId);
+        const overIds = getSiblingIds(col, overKind as 'reqs' | 'folders', overParent);
+        const newPos = overIds.indexOf(overId);
         if (newPos < 0) return;
 
-        const activeStr = active.id as string;
-        if (kind === 'reqs') {
-            p.onReorderRequest(col.id, activeStr, '', newPos);
+        if (activeContainer === overContainer) {
+            // Same parent → within-parent reorder.
+            if (isRequest(col, activeId)) {
+                p.onReorderRequest(col.id, activeId, '', newPos);
+            } else {
+                p.onReorderFolder(col.id, activeId, '', newPos);
+            }
         } else {
-            p.onReorderFolder(col.id, activeStr, '', newPos);
+            // Different parent → cross-parent reparent.
+            const newParent = overParent === 'root' ? '' : overParent;
+            if (isRequest(col, activeId)) {
+                p.onReorderRequest(col.id, activeId, newParent, newPos);
+            } else {
+                p.onReorderFolder(col.id, activeId, newParent, newPos);
+            }
         }
     }
+
+    const filtered = useMemo(() => {
+        if (!filter.trim()) return p.collections;
+        const q = filter.toLowerCase();
+        return p.collections.filter(col =>
+            treeMatchesFilter(col.folders, col.requests, q)
+        );
+    }, [p.collections, filter]);
+
 
     /** Check if any request in a tree matches the filter query. */
     function treeMatchesFilter(folders: main.FolderNode[], reqs: main.SavedRequest[], q: string): boolean {
@@ -261,15 +244,6 @@ export function CollectionsSection(p: Props) {
         }
         return false;
     }
-
-    const filtered = useMemo(() => {
-        if (!filter.trim()) return p.collections;
-        const q = filter.toLowerCase();
-        return p.collections.filter(col =>
-            treeMatchesFilter(col.folders, col.requests, q)
-        );
-    }, [p.collections, filter]);
-
     /** Render folder children — the sortable lists inside a folder. */
     function renderFolderChildren(colId: string, folder: main.FolderNode, depth: number) {
         const isCollapsed = collapsed.has(`${colId}/${folder.id}`);
@@ -341,7 +315,7 @@ export function CollectionsSection(p: Props) {
     return (
         <DndContext
             sensors={sensors}
-            collisionDetection={closestCorners}
+            collisionDetection={closestCenter}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
             onDragCancel={() => setActiveId(null)}
@@ -585,4 +559,36 @@ function FolderNameForm({name, onChange, onCancel, onSubmit, depth}: {
             </Group>
         </form>
     );
+}
+
+/** Find which collection contains a given request or folder ID. */
+function findOwningCollection(cols: main.Collection[], id: string): main.Collection | null {
+    for (const col of cols) {
+        if (col.requests.some(r => r.id === id)) return col;
+        if (col.folders.some(f => f.id === id)) return col;
+        if (idInFolders(col.folders, id)) return col;
+    }
+    return null;
+}
+
+function idInFolders(folders: main.FolderNode[], id: string): boolean {
+    for (const f of folders) {
+        if (f.id === id) return true;
+        if (f.requests.some(r => r.id === id)) return true;
+        if (f.folders.some(c => c.id === id)) return true;
+        if (idInFolders(f.folders, id)) return true;
+    }
+    return false;
+}
+
+/** Get the ordered sibling IDs for a given container. */
+function getSiblingIds(col: main.Collection, kind: 'reqs' | 'folders', parentId: string): string[] {
+    if (parentId === 'root') {
+        if (kind === 'reqs') return col.requests.map(r => r.id);
+        return col.folders.map(f => f.id);
+    }
+    const f = findFolder(col, parentId);
+    if (!f) return [];
+    if (kind === 'reqs') return f.requests.map(r => r.id);
+    return f.folders.map(f2 => f2.id);
 }
