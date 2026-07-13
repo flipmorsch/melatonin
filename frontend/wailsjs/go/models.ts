@@ -58,6 +58,8 @@ export namespace main {
 	    body: string;
 	    auth: Auth;
 	    options: SendOptions;
+	    preRequestScript: string;
+	    postResponseScript: string;
 	    position: number;
 	
 	    static createFrom(source: any = {}) {
@@ -75,6 +77,8 @@ export namespace main {
 	        this.body = source["body"];
 	        this.auth = this.convertValues(source["auth"], Auth);
 	        this.options = this.convertValues(source["options"], SendOptions);
+	        this.preRequestScript = source["preRequestScript"];
+	        this.postResponseScript = source["postResponseScript"];
 	        this.position = source["position"];
 	    }
 	
@@ -228,6 +232,8 @@ export namespace main {
 	    size: number;
 	    truncated: boolean;
 	    finalUrl: string;
+	    preScriptLog: string;
+	    postScriptLog: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ResponseData(source);
@@ -243,6 +249,8 @@ export namespace main {
 	        this.size = source["size"];
 	        this.truncated = source["truncated"];
 	        this.finalUrl = source["finalUrl"];
+	        this.preScriptLog = source["preScriptLog"];
+	        this.postScriptLog = source["postScriptLog"];
 	    }
 	}
 	export class RequestInput {
@@ -253,6 +261,8 @@ export namespace main {
 	    body: string;
 	    auth: Auth;
 	    options: SendOptions;
+	    preRequestScript: string;
+	    postResponseScript: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new RequestInput(source);
@@ -267,6 +277,8 @@ export namespace main {
 	        this.body = source["body"];
 	        this.auth = this.convertValues(source["auth"], Auth);
 	        this.options = this.convertValues(source["options"], SendOptions);
+	        this.preRequestScript = source["preRequestScript"];
+	        this.postResponseScript = source["postResponseScript"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -293,6 +305,10 @@ export namespace main {
 	    request: RequestInput;
 	    response?: ResponseData;
 	    error: string;
+	    hadPreScript: boolean;
+	    hadPostScript: boolean;
+	    preScriptError: string;
+	    postScriptError: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new HistoryEntry(source);
@@ -305,6 +321,10 @@ export namespace main {
 	        this.request = this.convertValues(source["request"], RequestInput);
 	        this.response = this.convertValues(source["response"], ResponseData);
 	        this.error = source["error"];
+	        this.hadPreScript = source["hadPreScript"];
+	        this.hadPostScript = source["hadPostScript"];
+	        this.preScriptError = source["preScriptError"];
+	        this.postScriptError = source["postScriptError"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -37,6 +37,8 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
     const [timeoutSec, setTimeoutSec] = useState<number | string>(0);
     const [noRedirects, setNoRedirects] = useState(false);
     const [skipTls, setSkipTls] = useState(false);
+    const [preScript, setPreScript] = useState('');
+    const [postScript, setPostScript] = useState('');
     const [open, setOpen] = useState<string[]>([]);
 
     const [response, setResponse] = useState<main.ResponseData | null>(null);
@@ -76,10 +78,14 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
         setTimeoutSec(r.options?.timeoutSec || 0);
         setNoRedirects(r.options?.noFollowRedirects ?? false);
         setSkipTls(r.options?.skipTlsVerify ?? false);
+        setPreScript(r.preRequestScript ?? '');
+        setPostScript(r.postResponseScript ?? '');
+        const hasScript = (r.preRequestScript ?? '') || (r.postResponseScript ?? '');
         setOpen([
             ...(r.params?.length ? ['params'] : []),
             ...(r.headers?.length || r.auth?.type ? ['headers'] : []),
             ...(r.body ? ['body'] : []),
+            ...(hasScript ? ['scripts'] : []),
             ...(r.options?.timeoutSec || r.options?.noFollowRedirects || r.options?.skipTlsVerify
                 ? ['options'] : []),
         ]);
@@ -153,6 +159,8 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
             body,
             auth: auth(),
             options: options(),
+            preRequestScript: preScript,
+            postResponseScript: postScript,
         });
         setSaveState('saving');
         const timer = window.setTimeout(() => {
@@ -161,9 +169,8 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                 .then(() => setSaveState('saved'))
                 .catch(e => setError(String(e)));
         }, 600);
-        pending.current = {timer, colId, req};
     }, [name, method, url, params, headers, body,
-        authType, authToken, authUser, authPass, timeoutSec, noRedirects, skipTls]);
+        authType, authToken, authUser, authPass, timeoutSec, noRedirects, skipTls, preScript, postScript]);
 
     async function send() {
         setSending(true);
@@ -178,6 +185,8 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                 body,
                 auth: auth(),
                 options: options(),
+                preRequestScript: preScript,
+                postResponseScript: postScript,
             })));
         } catch (e) {
             setError(String(e));
@@ -373,6 +382,48 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                                 onChange={e => setSkipTls(e.currentTarget.checked)}
                             />
                         </Group>
+                    </Accordion.Panel>
+                </Accordion.Item>
+
+                <Accordion.Item value="scripts">
+                    {sectionControl('Scripts',
+                        (preScript ? 1 : 0) + (postScript ? 1 : 0),
+                        (preScript || postScript) ? <Badge size="xs" variant="dot" color="violet"/> : undefined)}
+                    <Accordion.Panel>
+                        <Stack gap="xs">
+                            <Text size="xs" fw={600} c="dark.2">Pre-request script</Text>
+                            <CodeEditor
+                                key={(selected?.req.id ?? 'scratch') + '-pre'}
+                                value={preScript}
+                                onChange={setPreScript}
+                                placeholder={'// Runs before the HTTP call.\n// Mutate `request` to change what gets sent.'}
+                                variables={variables}
+                                minHeight={60}
+                            />
+                            {response?.preScriptLog ? (
+                                <Text component="pre" size="xs" ff="monospace" c="dark.2"
+                                    style={{margin: 0, padding: '4px 8px', background: 'var(--mantine-color-dark-6)', borderRadius: 4, maxHeight: 80, overflow: 'auto'}}>
+                                    {response.preScriptLog}
+                                </Text>
+                            ) : null}
+                        </Stack>
+                        <Stack gap="xs" mt="xs">
+                            <Text size="xs" fw={600} c="dark.2">Post-response script</Text>
+                            <CodeEditor
+                                key={(selected?.req.id ?? 'scratch') + '-post'}
+                                value={postScript}
+                                onChange={setPostScript}
+                                placeholder={'// Runs after the response arrives.\n// Mutate `response` to change what the UI shows.\n// Call `env.set("name", value)` to extract values.'}
+                                variables={variables}
+                                minHeight={60}
+                            />
+                            {response?.postScriptLog ? (
+                                <Text component="pre" size="xs" ff="monospace" c="dark.2"
+                                    style={{margin: 0, padding: '4px 8px', background: 'var(--mantine-color-dark-6)', borderRadius: 4, maxHeight: 80, overflow: 'auto'}}>
+                                    {response.postScriptLog}
+                                </Text>
+                            ) : null}
+                        </Stack>
                     </Accordion.Panel>
                 </Accordion.Item>
             </Accordion>

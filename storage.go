@@ -49,16 +49,18 @@ func (l *KVList) UnmarshalJSON(data []byte) error {
 // SavedRequest is an HTTP request definition stored inside a Collection
 // (at root or nested inside a FolderNode).
 type SavedRequest struct {
-	ID       string      `json:"id"`
-	Name     string      `json:"name"`
-	Method   string      `json:"method"`
-	URL      string      `json:"url"`
-	Params   KVList      `json:"params"`
-	Headers  KVList      `json:"headers"`
-	Body     string      `json:"body"`
-	Auth     Auth        `json:"auth"`
-	Options  SendOptions `json:"options"` // zero value in pre-v1.1 collection files = all defaults
-	Position int         `json:"position"`
+	ID        string      `json:"id"`
+	Name      string      `json:"name"`
+	Method    string      `json:"method"`
+	URL       string      `json:"url"`
+	Params    KVList      `json:"params"`
+	Headers   KVList      `json:"headers"`
+	Body      string      `json:"body"`
+	Auth      Auth        `json:"auth"`
+	Options   SendOptions `json:"options"` // zero value in pre-v1.1 collection files = all defaults
+	PreScript  string      `json:"preRequestScript"`  // empty string = no pre-request script
+	PostScript string      `json:"postResponseScript"` // empty string = no post-response script
+	Position  int         `json:"position"`
 }
 
 // FolderNode is a named grouping inside a Collection. It contains child

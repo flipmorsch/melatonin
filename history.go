@@ -15,11 +15,15 @@ const (
 // HistoryEntry is one recorded send: the request as typed (variables
 // unresolved, so env secrets stay out of the file) plus the outcome.
 type HistoryEntry struct {
-	ID       string        `json:"id"`
-	Time     string        `json:"time"` // RFC3339
-	Request  RequestInput  `json:"request"`
-	Response *ResponseData `json:"response"` // nil when the send failed
-	Error    string        `json:"error"`
+	ID              string        `json:"id"`
+	Time            string        `json:"time"` // RFC3339
+	Request         RequestInput  `json:"request"`
+	Response        *ResponseData `json:"response"` // nil when the send failed
+	Error           string        `json:"error"`
+	HadPreScript    bool          `json:"hadPreScript"`    // true if a pre-request script ran (even if empty)
+	HadPostScript   bool          `json:"hadPostScript"`   // true if a post-response script ran
+	PreScriptError  string        `json:"preScriptError"`  // non-empty when the pre-request script threw
+	PostScriptError string        `json:"postScriptError"` // non-empty when the post-response script threw
 }
 
 func (a *App) historyPath() string { return filepath.Join(a.dataDir, "history.json") }
@@ -52,10 +56,20 @@ func (a *App) ClearHistory() error {
 
 // recordHistory prepends one entry, enforcing the caps. Best-effort: a
 // failed history write must never fail the send itself.
-func (a *App) recordHistory(in RequestInput, resp *ResponseData, sendErr error) {
+// sendErr is the HTTP-level error (connection refused, timeout, etc.);
+// preErr/postErr are script-level errors.
+func (a *App) recordHistory(in RequestInput, resp *ResponseData, sendErr error, hadPre, hadPost bool, preErr, postErr string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	entry := HistoryEntry{ID: newID(), Time: time.Now().Format(time.RFC3339), Request: in}
+	entry := HistoryEntry{
+		ID:              newID(),
+		Time:            time.Now().Format(time.RFC3339),
+		Request:         in,
+		HadPreScript:    hadPre,
+		HadPostScript:   hadPost,
+		PreScriptError:  preErr,
+		PostScriptError: postErr,
+	}
 	if sendErr != nil {
 		entry.Error = sendErr.Error()
 	}

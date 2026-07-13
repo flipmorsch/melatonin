@@ -10,6 +10,10 @@ export function ClearMockLog(arg1) {
   return window['go']['main']['App']['ClearMockLog'](arg1);
 }
 
+export function ClearSessionVariables() {
+  return window['go']['main']['App']['ClearSessionVariables']();
+}
+
 export function CountFolderDescendants(arg1, arg2) {
   return window['go']['main']['App']['CountFolderDescendants'](arg1, arg2);
 }
@@ -88,6 +92,10 @@ export function SaveRequest(arg1, arg2, arg3) {
 
 export function SendRequest(arg1) {
   return window['go']['main']['App']['SendRequest'](arg1);
+}
+
+export function SessionVariables() {
+  return window['go']['main']['App']['SessionVariables']();
 }
 
 export function SetActiveEnvironment(arg1) {

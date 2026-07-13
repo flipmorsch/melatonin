@@ -58,7 +58,7 @@ func TestHistoryRecordsSends(t *testing.T) {
 func TestHistoryCap(t *testing.T) {
 	a := testApp(t)
 	for range historyMax + 5 {
-		a.recordHistory(RequestInput{Method: "GET", URL: "http://x/"}, nil, nil)
+		a.recordHistory(RequestInput{Method: "GET", URL: "http://x/"}, nil, nil, false, false, "", "")
 	}
 	h, err := a.GetHistory()
 	if err != nil {
