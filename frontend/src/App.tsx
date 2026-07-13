@@ -36,8 +36,6 @@ function App() {
     const variables = Object.keys(
         environments.find(e => e.id === envs.envSet?.activeId)?.variables ?? {});
     const selectedMock = mocks.mocks.find(m => m.id === selectedMockId);
-    const folders = [...new Set(cols.collections.flatMap(c =>
-        (c.requests ?? []).map(r => r.folder).filter(Boolean)))];
 
     /** Runs a sidebar/topbar action, surfacing failures in the shell error strip. */
     const run = (p: Promise<unknown>) => {
@@ -59,8 +57,8 @@ function App() {
 
     const paletteItems: PaletteItem[] = useMemo(() => {
         const out: PaletteItem[] = [];
-        for (const col of cols.collections) {
-            for (const req of (col.requests ?? [])) {
+        const addReqs = (col: main.Collection, reqs: main.SavedRequest[]) => {
+            for (const req of reqs) {
                 out.push({
                     id: `req:${req.id}`,
                     label: req.name,
@@ -69,6 +67,16 @@ function App() {
                     onSelect: () => selectRequest(col.id, req),
                 });
             }
+        };
+        const walkFolders = (col: main.Collection, folders: main.FolderNode[]) => {
+            for (const f of folders) {
+                addReqs(col, f.requests);
+                walkFolders(col, f.folders);
+            }
+        };
+        for (const col of cols.collections) {
+            addReqs(col, col.requests);
+            walkFolders(col, col.folders);
         }
         for (const m of mocks.mocks) {
             const port = mocks.running[m.id];
@@ -115,25 +123,23 @@ function App() {
         setView('request');
     }
 
-    /** Shows a history entry's read-only details. */
     function selectHistory(e: main.HistoryEntry) {
         setHistDetail(e);
         setView('history');
     }
 
-    /** Loads a history entry into the scratch editor with its recorded response. */
     function openHistoryInEditor(e: main.HistoryEntry) {
         setSelected(null);
         setReplay(e);
         setView('request');
     }
 
-    async function addRequest(colId: string) {
+    async function addRequest(colId: string, parentFolderId?: string) {
         const req = await cols.saveRequest(colId, main.SavedRequest.createFrom({
-            id: '', name: 'New Request', folder: '', method: 'GET', url: '',
+            id: '', name: 'New Request', method: 'GET', url: '',
             params: [], headers: [], body: '',
             auth: {type: '', token: '', username: '', password: ''},
-        }));
+        }), parentFolderId);
         selectRequest(colId, req);
     }
 
@@ -211,7 +217,14 @@ function App() {
                         if (selected?.colId === id) setSelected(null);
                         run(cols.remove(id));
                     }}
-                    onAddRequest={id => run(addRequest(id))}
+                    onCreateFolder={(colId: string, parentId: string, name: string) =>
+                        cols.createFolder(colId, parentId, name)}
+                    onDeleteFolder={(colId: string, folderId: string) =>
+                        cols.removeFolder(colId, folderId)}
+                    onCountFolder={(colId: string, folderId: string) =>
+                        cols.countFolder(colId, folderId)}
+                    onAddRequest={(colId: string, parentFolderId?: string) =>
+                        run(addRequest(colId, parentFolderId))}
                     onDeleteRequest={(colId, reqId) => {
                         if (selected?.req.id === reqId) setSelected(null);
                         run(cols.removeRequest(colId, reqId));
@@ -251,8 +264,8 @@ function App() {
                 {shellError &&
                     <Text size="sm" ff="monospace" c="red.4" mb="xs">{shellError}</Text>}
                 {view === 'request' &&
-                    <RequestView selected={selected} replay={replay} folders={folders}
-                        variables={variables} onSave={cols.saveRequest}
+                    <RequestView selected={selected} replay={replay}
+                        variables={variables} onSave={(colId, req) => cols.saveRequest(colId, req)}
                         onSent={() => hist.reload().catch(console.error)}/>}
                 {view === 'environments' &&
                     <EnvironmentsView envSet={envs.envSet} onSave={envs.save} onDelete={envs.remove}/>}

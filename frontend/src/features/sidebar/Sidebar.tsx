@@ -11,7 +11,10 @@ interface Props {
     onSelectRequest: (colId: string, req: main.SavedRequest) => void;
     onCreateCollection: (name: string) => void;
     onDeleteCollection: (id: string) => void;
-    onAddRequest: (colId: string) => void;
+    onCreateFolder: (colId: string, parentFolderId: string, name: string) => Promise<void>;
+    onDeleteFolder: (colId: string, folderId: string) => Promise<void>;
+    onCountFolder: (colId: string, folderId: string) => Promise<number>;
+    onAddRequest: (colId: string, parentFolderId?: string) => void;
     onDeleteRequest: (colId: string, reqId: string) => void;
 
     mocks: main.MockServer[];
@@ -39,8 +42,11 @@ export function Sidebar(p: Props) {
                 collections={p.collections}
                 selectedReqId={p.selectedReqId}
                 onSelect={p.onSelectRequest}
-                onCreate={p.onCreateCollection}
-                onDelete={p.onDeleteCollection}
+                onCreateCollection={p.onCreateCollection}
+                onDeleteCollection={p.onDeleteCollection}
+                onCreateFolder={p.onCreateFolder}
+                onDeleteFolder={p.onDeleteFolder}
+                onCountFolder={p.onCountFolder}
                 onAddRequest={p.onAddRequest}
                 onDeleteRequest={p.onDeleteRequest}
             />

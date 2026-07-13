@@ -83,7 +83,7 @@ export function MocksSection(p: Props) {
                         {open && (m.routes ?? []).map(r =>
                             <SidebarRow
                                 key={r.id}
-                                indent
+                                depth={1}
                                 selected={p.selectedRouteId === r.id}
                                 onClick={() => p.onSelectRoute(m, r.id)}
                                 left={<MethodBadge method={r.method}/>}

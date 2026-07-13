@@ -10,20 +10,23 @@ interface Props {
     /** Rendered after the main click target as a sibling — may contain buttons. */
     right?: ReactNode;
     selected?: boolean;
-    indent?: boolean;
+    /** Nested depth in the folder tree. 0 = root, 1 = first-level folder, etc. */
+    depth?: number;
     onClick: () => void;
 }
 
 /** Dense clickable row for sidebar lists (requests, mock servers, environments).
  * The label is a button; `leading`/`right` are siblings so rows never nest buttons. */
-export function SidebarRow({label, left, leading, right, selected, indent, onClick}: Props) {
+export function SidebarRow({label, left, leading, right, selected, depth, onClick}: Props) {
+    const hasDepth = (depth ?? 0) > 0;
+    const ml = (depth ?? 0) * 16;
     return (
         <Group
             gap={0}
             wrap="nowrap"
             className="hover-row side-row"
-            w={indent ? 'calc(100% - 12px)' : '100%'}
-            ml={indent ? 12 : 0}
+            w={hasDepth ? `calc(100% - ${ml}px)` : '100%'}
+            ml={ml}
             style={{
                 borderRadius: 'var(--mantine-radius-sm)',
                 background: selected ? 'var(--selected-bg)' : undefined,
@@ -43,3 +46,4 @@ export function SidebarRow({label, left, leading, right, selected, indent, onCli
         </Group>
     );
 }
+

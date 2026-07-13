@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -45,10 +46,11 @@ func (l *KVList) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// SavedRequest is an HTTP request definition stored inside a Collection
+// (at root or nested inside a FolderNode).
 type SavedRequest struct {
 	ID      string      `json:"id"`
 	Name    string      `json:"name"`
-	Folder  string      `json:"folder"` // single-level grouping inside the collection; "" = root
 	Method  string      `json:"method"`
 	URL     string      `json:"url"`
 	Params  KVList      `json:"params"`
@@ -58,11 +60,96 @@ type SavedRequest struct {
 	Options SendOptions `json:"options"` // zero value in pre-v1.1 collection files = all defaults
 }
 
+// FolderNode is a named grouping inside a Collection. It contains child
+// folders and child requests, forming a nested tree. Order is user-controlled
+// and persisted.
+type FolderNode struct {
+	ID       string         `json:"id"`
+	Name     string         `json:"name"`
+	Folders  []FolderNode   `json:"folders"`
+	Requests []SavedRequest `json:"requests"`
+}
+
+// Collection is a named container holding an ordered tree of FolderNodes
+// and root-level Requests.
 type Collection struct {
 	ID       string         `json:"id"`
 	Name     string         `json:"name"`
+	Folders  []FolderNode   `json:"folders"`
 	Requests []SavedRequest `json:"requests"`
 }
+
+// ---------- legacy types for v1 migration ----------
+
+// legacySavedRequest is the pre-tree format with a flat Folder string.
+type legacySavedRequest struct {
+	ID      string      `json:"id"`
+	Name    string      `json:"name"`
+	Folder  string      `json:"folder"`
+	Method  string      `json:"method"`
+	URL     string      `json:"url"`
+	Params  KVList      `json:"params"`
+	Headers KVList      `json:"headers"`
+	Body    string      `json:"body"`
+	Auth    Auth        `json:"auth"`
+	Options SendOptions `json:"options"`
+}
+
+// legacyCollection is the pre-tree flat format.
+type legacyCollection struct {
+	ID       string               `json:"id"`
+	Name     string               `json:"name"`
+	Requests []legacySavedRequest `json:"requests"`
+}
+
+// migrateCollection converts a flat legacy collection into the tree format.
+// Requests with the same folder name are grouped into a FolderNode.
+func migrateCollection(lc *legacyCollection) *Collection {
+	c := &Collection{
+		ID:       lc.ID,
+		Name:     lc.Name,
+		Folders:  []FolderNode{},
+		Requests: []SavedRequest{},
+	}
+	folderMap := map[string][]SavedRequest{} // folder name -> requests
+	rootReqs := []SavedRequest{}
+	for _, lr := range lc.Requests {
+		sr := SavedRequest{
+			ID:      lr.ID,
+			Name:    lr.Name,
+			Method:  lr.Method,
+			URL:     lr.URL,
+			Params:  lr.Params,
+			Headers: lr.Headers,
+			Body:    lr.Body,
+			Auth:    lr.Auth,
+			Options: lr.Options,
+		}
+		if lr.Folder == "" {
+			rootReqs = append(rootReqs, sr)
+		} else {
+			folderMap[lr.Folder] = append(folderMap[lr.Folder], sr)
+		}
+	}
+	c.Requests = rootReqs
+	// preserve order: sort folder names for determinism
+	folderNames := make([]string, 0, len(folderMap))
+	for n := range folderMap {
+		folderNames = append(folderNames, n)
+	}
+	sort.Strings(folderNames)
+	for _, name := range folderNames {
+		c.Folders = append(c.Folders, FolderNode{
+			ID:       newID(),
+			Name:     name,
+			Requests: folderMap[name],
+			Folders:  []FolderNode{},
+		})
+	}
+	return c
+}
+
+// ---------- helpers ----------
 
 func defaultDataDir() string {
 	base, err := os.UserConfigDir()
@@ -113,15 +200,62 @@ func (a *App) collectionPath(id string) string {
 }
 
 func (a *App) readCollection(id string) (*Collection, error) {
-	var c Collection
-	if err := readJSONFile(a.collectionPath(id), &c); err != nil {
+	data, err := os.ReadFile(a.collectionPath(id))
+	if err != nil {
 		return nil, err
+	}
+	// Detect old flat format: if the JSON contains "folder": keys on requests,
+	// migrate to the tree format. The SavedRequest struct no longer has a Folder
+	// field, so old data would silently lose folder information without this.
+	if bytes.Contains(data, []byte(`"folder":`)) {
+		var lc legacyCollection
+		if err := json.Unmarshal(data, &lc); err != nil {
+			return nil, fmt.Errorf("parse legacy %s: %w", a.collectionPath(id), err)
+		}
+		c := migrateCollection(&lc)
+		// Write back in new format so the migration is persisted.
+		if err := a.writeCollection(c); err != nil {
+			return nil, err
+		}
+		return c, nil
+	}
+	var c Collection
+	if err := json.Unmarshal(data, &c); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", a.collectionPath(id), err)
+	}
+	// Ensure empty slices, not nil, so the JSON never writes "null".
+	if c.Folders == nil {
+		c.Folders = []FolderNode{}
+	}
+	if c.Requests == nil {
+		c.Requests = []SavedRequest{}
 	}
 	return &c, nil
 }
 
 func (a *App) writeCollection(c *Collection) error {
+	// Normalize so JSON always writes [] not null.
+	if c.Folders == nil {
+		c.Folders = []FolderNode{}
+	}
+	if c.Requests == nil {
+		c.Requests = []SavedRequest{}
+	}
+	normalizeFolderNodes(c.Folders)
 	return writeJSONFile(a.collectionPath(c.ID), c)
+}
+
+// normalizeFolderNodes ensures empty slices are written as [] not null.
+func normalizeFolderNodes(folders []FolderNode) {
+	for i := range folders {
+		if folders[i].Folders == nil {
+			folders[i].Folders = []FolderNode{}
+		}
+		if folders[i].Requests == nil {
+			folders[i].Requests = []SavedRequest{}
+		}
+		normalizeFolderNodes(folders[i].Folders)
+	}
 }
 
 func (a *App) ListCollections() ([]Collection, error) {
@@ -152,7 +286,12 @@ func (a *App) ListCollections() ([]Collection, error) {
 func (a *App) CreateCollection(name string) (*Collection, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	c := &Collection{ID: newID(), Name: name, Requests: []SavedRequest{}}
+	c := &Collection{
+		ID:       newID(),
+		Name:     name,
+		Folders:  []FolderNode{},
+		Requests: []SavedRequest{},
+	}
 	return c, a.writeCollection(c)
 }
 
@@ -162,8 +301,10 @@ func (a *App) DeleteCollection(id string) error {
 	return os.Remove(a.collectionPath(id))
 }
 
-// SaveRequest creates the request when ID is empty, updates it otherwise.
-func (a *App) SaveRequest(collectionID string, req SavedRequest) (*SavedRequest, error) {
+// SaveRequest creates or updates a request. When ID is empty, a new request
+// is created: at root if parentFolderID is "", or inside the named folder.
+// When ID is set, the request is updated in-place anywhere in the tree.
+func (a *App) SaveRequest(collectionID string, req SavedRequest, parentFolderID string) (*SavedRequest, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	c, err := a.readCollection(collectionID)
@@ -172,21 +313,78 @@ func (a *App) SaveRequest(collectionID string, req SavedRequest) (*SavedRequest,
 	}
 	if req.ID == "" {
 		req.ID = newID()
-		c.Requests = append(c.Requests, req)
-	} else {
-		found := false
-		for i := range c.Requests {
-			if c.Requests[i].ID == req.ID {
-				c.Requests[i] = req
-				found = true
-				break
+		if parentFolderID == "" {
+			c.Requests = append(c.Requests, req)
+		} else {
+			if !insertRequestInTree(c, parentFolderID, req) {
+				return nil, fmt.Errorf("parent folder %s not found in collection %s", parentFolderID, collectionID)
 			}
 		}
-		if !found {
+	} else {
+		if !updateRequestInTree(c, req) {
 			return nil, fmt.Errorf("request %s not in collection %s", req.ID, collectionID)
 		}
 	}
 	return &req, a.writeCollection(c)
+}
+
+// insertRequestInTree places req into the folder identified by parentID.
+func insertRequestInTree(c *Collection, parentID string, req SavedRequest) bool {
+	for i := range c.Folders {
+		if c.Folders[i].ID == parentID {
+			c.Folders[i].Requests = append(c.Folders[i].Requests, req)
+			return true
+		}
+		if insertRequestInFolder(&c.Folders[i], parentID, req) {
+			return true
+		}
+	}
+	return false
+}
+
+func insertRequestInFolder(f *FolderNode, parentID string, req SavedRequest) bool {
+	if f.ID == parentID {
+		f.Requests = append(f.Requests, req)
+		return true
+	}
+	for i := range f.Folders {
+		if insertRequestInFolder(&f.Folders[i], parentID, req) {
+			return true
+		}
+	}
+	return false
+}
+
+// updateRequestInTree walks the collection tree looking for req.ID and
+// replaces it in-place. Returns true if found.
+func updateRequestInTree(c *Collection, req SavedRequest) bool {
+	for i := range c.Requests {
+		if c.Requests[i].ID == req.ID {
+			c.Requests[i] = req
+			return true
+		}
+	}
+	for i := range c.Folders {
+		if updateRequestInFolder(&c.Folders[i], req) {
+			return true
+		}
+	}
+	return false
+}
+
+func updateRequestInFolder(f *FolderNode, req SavedRequest) bool {
+	for i := range f.Requests {
+		if f.Requests[i].ID == req.ID {
+			f.Requests[i] = req
+			return true
+		}
+	}
+	for i := range f.Folders {
+		if updateRequestInFolder(&f.Folders[i], req) {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *App) DeleteRequest(collectionID, requestID string) error {
@@ -196,13 +394,177 @@ func (a *App) DeleteRequest(collectionID, requestID string) error {
 	if err != nil {
 		return err
 	}
-	for i := range c.Requests {
-		if c.Requests[i].ID == requestID {
-			c.Requests = append(c.Requests[:i], c.Requests[i+1:]...)
-			return a.writeCollection(c)
-		}
+	if deleteRequestFromTree(c, requestID) {
+		return a.writeCollection(c)
 	}
 	return fmt.Errorf("request %s not in collection %s", requestID, collectionID)
+}
+
+// deleteRequestFromTree walks the tree and removes the request by ID.
+func deleteRequestFromTree(c *Collection, id string) bool {
+	for i := range c.Requests {
+		if c.Requests[i].ID == id {
+			c.Requests = append(c.Requests[:i], c.Requests[i+1:]...)
+			return true
+		}
+	}
+	for i := range c.Folders {
+		if deleteRequestFromFolder(&c.Folders[i], id) {
+			return true
+		}
+	}
+	return false
+}
+
+func deleteRequestFromFolder(f *FolderNode, id string) bool {
+	for i := range f.Requests {
+		if f.Requests[i].ID == id {
+			f.Requests = append(f.Requests[:i], f.Requests[i+1:]...)
+			return true
+		}
+	}
+	for i := range f.Folders {
+		if deleteRequestFromFolder(&f.Folders[i], id) {
+			return true
+		}
+	}
+	return false
+}
+
+// CreateFolder creates a new folder at root or inside a parent folder.
+// parentFolderID == "" means create at the collection root.
+func (a *App) CreateFolder(collectionID, parentFolderID, name string) (*FolderNode, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	c, err := a.readCollection(collectionID)
+	if err != nil {
+		return nil, err
+	}
+	f := FolderNode{
+		ID:       newID(),
+		Name:     name,
+		Folders:  []FolderNode{},
+		Requests: []SavedRequest{},
+	}
+	if parentFolderID == "" {
+		c.Folders = append(c.Folders, f)
+	} else {
+		if !insertFolderInTree(c, parentFolderID, f) {
+			return nil, fmt.Errorf("parent folder %s not found in collection %s", parentFolderID, collectionID)
+		}
+	}
+	return &f, a.writeCollection(c)
+}
+
+func insertFolderInTree(c *Collection, parentID string, f FolderNode) bool {
+	for i := range c.Folders {
+		if c.Folders[i].ID == parentID {
+			c.Folders[i].Folders = append(c.Folders[i].Folders, f)
+			return true
+		}
+		if insertFolderInFolder(&c.Folders[i], parentID, f) {
+			return true
+		}
+	}
+	return false
+}
+
+func insertFolderInFolder(parent *FolderNode, parentID string, f FolderNode) bool {
+	if parent.ID == parentID {
+		parent.Folders = append(parent.Folders, f)
+		return true
+	}
+	for i := range parent.Folders {
+		if insertFolderInFolder(&parent.Folders[i], parentID, f) {
+			return true
+		}
+	}
+	return false
+}
+
+// DeleteFolder removes a folder and all its descendants (cascade).
+func (a *App) DeleteFolder(collectionID, folderID string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	c, err := a.readCollection(collectionID)
+	if err != nil {
+		return err
+	}
+	if deleteFolderFromTree(c, folderID) {
+		return a.writeCollection(c)
+	}
+	return fmt.Errorf("folder %s not found in collection %s", folderID, collectionID)
+}
+
+func deleteFolderFromTree(c *Collection, id string) bool {
+	for i := range c.Folders {
+		if c.Folders[i].ID == id {
+			c.Folders = append(c.Folders[:i], c.Folders[i+1:]...)
+			return true
+		}
+		if deleteFolderFromSlice(&c.Folders[i], id) {
+			return true
+		}
+	}
+	return false
+}
+
+func deleteFolderFromSlice(parent *FolderNode, id string) bool {
+	for i := range parent.Folders {
+		if parent.Folders[i].ID == id {
+			parent.Folders = append(parent.Folders[:i], parent.Folders[i+1:]...)
+			return true
+		}
+		if deleteFolderFromSlice(&parent.Folders[i], id) {
+			return true
+		}
+	}
+	return false
+}
+
+// CountFolderDescendants returns the total number of requests (recursively)
+// inside a folder, for the confirm-delete prompt.
+func (a *App) CountFolderDescendants(collectionID, folderID string) (int, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	c, err := a.readCollection(collectionID)
+	if err != nil {
+		return 0, err
+	}
+	n, found := countInTree(c, folderID)
+	if !found {
+		return 0, fmt.Errorf("folder %s not found in collection %s", folderID, collectionID)
+	}
+	return n, nil
+}
+
+func countInTree(c *Collection, folderID string) (int, bool) {
+	for _, f := range c.Folders {
+		if n, found := countInFolder(&f, folderID); found {
+			return n, true
+		}
+	}
+	return 0, false
+}
+
+func countInFolder(f *FolderNode, folderID string) (int, bool) {
+	if f.ID == folderID {
+		return countAll(f), true
+	}
+	for i := range f.Folders {
+		if n, found := countInFolder(&f.Folders[i], folderID); found {
+			return n, true
+		}
+	}
+	return 0, false
+}
+
+func countAll(f *FolderNode) int {
+	n := len(f.Requests)
+	for i := range f.Folders {
+		n += countAll(&f.Folders[i])
+	}
+	return n
 }
 
 // ---------- environments ----------

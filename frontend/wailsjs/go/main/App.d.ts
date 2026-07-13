@@ -6,11 +6,17 @@ export function ClearHistory():Promise<void>;
 
 export function ClearMockLog(arg1:string):Promise<void>;
 
+export function CountFolderDescendants(arg1:string,arg2:string):Promise<number>;
+
 export function CreateCollection(arg1:string):Promise<main.Collection>;
+
+export function CreateFolder(arg1:string,arg2:string,arg3:string):Promise<main.FolderNode>;
 
 export function DeleteCollection(arg1:string):Promise<void>;
 
 export function DeleteEnvironment(arg1:string):Promise<void>;
+
+export function DeleteFolder(arg1:string,arg2:string):Promise<void>;
 
 export function DeleteMockServer(arg1:string):Promise<void>;
 
@@ -32,7 +38,7 @@ export function SaveEnvironment(arg1:main.Environment):Promise<main.Environment>
 
 export function SaveMockServer(arg1:main.MockServer):Promise<main.MockServer>;
 
-export function SaveRequest(arg1:string,arg2:main.SavedRequest):Promise<main.SavedRequest>;
+export function SaveRequest(arg1:string,arg2:main.SavedRequest,arg3:string):Promise<main.SavedRequest>;
 
 export function SendRequest(arg1:main.RequestInput):Promise<main.ResponseData>;
 

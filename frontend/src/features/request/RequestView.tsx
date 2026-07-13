@@ -1,6 +1,6 @@
 import {ReactNode, useEffect, useRef, useState} from 'react';
 import {
-    Accordion, ActionIcon, Autocomplete, Badge, Button, Checkbox, Group,
+    Accordion, ActionIcon, Badge, Button, Checkbox, Group,
     NativeSelect, NumberInput, PasswordInput, Stack, Text, TextInput,
 } from '@mantine/core';
 import {SendRequest} from '../../../wailsjs/go/main/App';
@@ -15,8 +15,6 @@ interface Props {
     selected: {colId: string, req: main.SavedRequest} | null;
     /** History entry to load into the scratch editor, or null. */
     replay: main.HistoryEntry | null;
-    /** Existing folder names across collections, for the folder autocomplete. */
-    folders: string[];
     /** Active environment's variable names, for {{var}} autocomplete. */
     variables: string[];
     /** Persists a request. Called by the debounced auto-save; there is no Save button. */
@@ -25,9 +23,8 @@ interface Props {
     onSent: () => void;
 }
 
-export function RequestView({selected, replay, folders, variables, onSave, onSent}: Props) {
+export function RequestView({selected, replay, variables, onSave, onSent}: Props) {
     const [name, setName] = useState('');
-    const [folder, setFolder] = useState('');
     const [method, setMethod] = useState('GET');
     const [url, setUrl] = useState('');
     const [params, setParams] = useState<KVRow[]>([]);
@@ -92,7 +89,6 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
         flushPending();
         if (!selected) return;
         setName(selected.req.name);
-        setFolder(selected.req.folder ?? '');
         loadFields(selected.req);
         setResponse(null);
         setError('');
@@ -104,7 +100,6 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
     useEffect(() => {
         if (!replay) return;
         setName('');
-        setFolder('');
         loadFields(replay.request);
         setResponse(replay.response ?? null);
         setError(replay.error ?? '');
@@ -151,7 +146,6 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
         const req = main.SavedRequest.createFrom({
             id: selected.req.id,
             name,
-            folder: folder.trim(),
             method,
             url,
             params: rowsToKV(params),
@@ -168,7 +162,7 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
                 .catch(e => setError(String(e)));
         }, 600);
         pending.current = {timer, colId, req};
-    }, [name, folder, method, url, params, headers, body,
+    }, [name, method, url, params, headers, body,
         authType, authToken, authUser, authPass, timeoutSec, noRedirects, skipTls]);
 
     async function send() {
@@ -238,16 +232,6 @@ export function RequestView({selected, replay, folders, variables, onSave, onSen
                     onChange={e => setName(e.target.value)}
                     placeholder={selected ? 'Request name' : 'Unsaved scratch request'}
                     disabled={!selected}
-                    aria-label="Request name"
-                />
-                <Autocomplete
-                    w={170}
-                    value={folder}
-                    onChange={setFolder}
-                    data={folders}
-                    placeholder="Folder (optional)"
-                    disabled={!selected}
-                    aria-label="Folder"
                 />
                 {selected && saveState !== 'saved' &&
                     <Text size="xs" ff="monospace" c={saveState === 'saving' ? 'dark.2' : 'yellow.4'}

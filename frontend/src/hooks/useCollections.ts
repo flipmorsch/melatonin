@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useState} from 'react';
-import {CreateCollection, DeleteCollection, DeleteRequest, ListCollections, SaveRequest} from '../../wailsjs/go/main/App';
+import {CreateCollection, CreateFolder, DeleteCollection, DeleteFolder, DeleteRequest, CountFolderDescendants, ListCollections, SaveRequest} from '../../wailsjs/go/main/App';
 import {main} from '../../wailsjs/go/models';
 
 /** Collections state + persistence. Actions throw — callers surface errors. */
@@ -22,8 +22,8 @@ export function useCollections() {
         await refresh();
     };
 
-    const saveRequest = async (colId: string, req: main.SavedRequest) => {
-        const saved = await SaveRequest(colId, req);
+    const saveRequest = async (colId: string, req: main.SavedRequest, parentFolderId?: string) => {
+        const saved = await SaveRequest(colId, req, parentFolderId ?? '');
         await refresh();
         return saved;
     };
@@ -33,5 +33,20 @@ export function useCollections() {
         await refresh();
     };
 
-    return {collections, refresh, create, remove, saveRequest, removeRequest};
+    const createFolder = async (colId: string, parentFolderId: string, name: string) => {
+        await CreateFolder(colId, parentFolderId, name);
+        await refresh();
+    };
+
+    const removeFolder = async (colId: string, folderId: string) => {
+        await DeleteFolder(colId, folderId);
+        await refresh();
+    };
+
+    const countFolder = async (colId: string, folderId: string) => {
+        return await CountFolderDescendants(colId, folderId);
+    };
+
+    return {collections, refresh, create, remove, saveRequest, removeRequest,
+        createFolder, removeFolder, countFolder};
 }

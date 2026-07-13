@@ -10,8 +10,16 @@ export function ClearMockLog(arg1) {
   return window['go']['main']['App']['ClearMockLog'](arg1);
 }
 
+export function CountFolderDescendants(arg1, arg2) {
+  return window['go']['main']['App']['CountFolderDescendants'](arg1, arg2);
+}
+
 export function CreateCollection(arg1) {
   return window['go']['main']['App']['CreateCollection'](arg1);
+}
+
+export function CreateFolder(arg1, arg2, arg3) {
+  return window['go']['main']['App']['CreateFolder'](arg1, arg2, arg3);
 }
 
 export function DeleteCollection(arg1) {
@@ -20,6 +28,10 @@ export function DeleteCollection(arg1) {
 
 export function DeleteEnvironment(arg1) {
   return window['go']['main']['App']['DeleteEnvironment'](arg1);
+}
+
+export function DeleteFolder(arg1, arg2) {
+  return window['go']['main']['App']['DeleteFolder'](arg1, arg2);
 }
 
 export function DeleteMockServer(arg1) {
@@ -62,8 +74,8 @@ export function SaveMockServer(arg1) {
   return window['go']['main']['App']['SaveMockServer'](arg1);
 }
 
-export function SaveRequest(arg1, arg2) {
-  return window['go']['main']['App']['SaveRequest'](arg1, arg2);
+export function SaveRequest(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveRequest'](arg1, arg2, arg3);
 }
 
 export function SendRequest(arg1) {

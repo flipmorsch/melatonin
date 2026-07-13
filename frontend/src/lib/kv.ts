@@ -38,17 +38,6 @@ export function prettyBody(res: main.ResponseData): string {
     return res.body;
 }
 
-/** Groups a collection's requests by folder; root ('') first, then folders alphabetically. */
-export function groupByFolder(reqs: main.SavedRequest[]): [string, main.SavedRequest[]][] {
-    const groups = new Map<string, main.SavedRequest[]>();
-    for (const r of reqs) {
-        const f = r.folder || '';
-        if (!groups.has(f)) groups.set(f, []);
-        groups.get(f)!.push(r);
-    }
-    return [...groups.entries()].sort(([a], [b]) =>
-        a === '' ? -1 : b === '' ? 1 : a.localeCompare(b));
-}
 
 export function headersToLines(headers: Record<string, string[]>): string {
     return Object.entries(headers ?? {})
