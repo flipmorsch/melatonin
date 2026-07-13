@@ -8,12 +8,12 @@ interface Props {
 export function ScriptLog({text}: Props) {
     return (
         <Box
-            py={6} px="xs"
+            py={8} px="sm"
             style={{
-                background: 'var(--mantine-color-dark-7)',
-                borderRadius: 'var(--mantine-radius-xs)',
-                borderLeft: '2px solid var(--mantine-color-dark-4)',
-                maxHeight: 100,
+                background: '#0a0c12',
+                borderRadius: 'var(--mantine-radius-sm)',
+                border: '1px solid var(--mantine-color-dark-4)',
+                maxHeight: 200,
                 overflow: 'auto',
             }}
         >

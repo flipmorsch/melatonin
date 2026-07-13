@@ -9,7 +9,6 @@ import {looksJson, METHODS} from '../../lib/kv';
 import {CodeEditor} from '../../components/CodeEditor';
 import {KVEditor, KVRow, newKVRow, rowsFromKV, rowsToKV} from '../../components/KVEditor';
 import {ScriptLog} from '../../components/ScriptLog';
-import {SectionLabel} from '../../components/SectionLabel';
 import {ResponseViewer} from './ResponseViewer';
 
 interface Props {
@@ -88,6 +87,8 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
             ...(r.body ? ['body'] : []),
             ...(r.options?.timeoutSec || r.options?.noFollowRedirects || r.options?.skipTlsVerify
                 ? ['options'] : []),
+            ...('preRequestScript' in r && (r as main.SavedRequest).preRequestScript ? ['pre-script'] : []),
+            ...('postResponseScript' in r && (r as main.SavedRequest).postResponseScript ? ['post-script'] : []),
         ]);
     }
 
@@ -177,7 +178,7 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
         setError('');
         setResponse(null);
         try {
-            setResponse(await SendRequest(main.RequestInput.createFrom({
+            const resp = await SendRequest(main.RequestInput.createFrom({
                 method,
                 url,
                 params: rowsToKV(params),
@@ -187,7 +188,17 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                 options: options(),
                 preRequestScript: preScript,
                 postResponseScript: postScript,
-            })));
+            }));
+            setResponse(resp);
+            // Auto-expand script items when logs came back
+            if (resp.preScriptLog?.trim() || resp.postScriptLog?.trim()) {
+                setOpen(o => {
+                    const next = [...o];
+                    if (resp.preScriptLog?.trim() && !next.includes('pre-script')) next.push('pre-script');
+                    if (resp.postScriptLog?.trim() && !next.includes('post-script')) next.push('post-script');
+                    return next;
+                });
+            }
         } catch (e) {
             setError(String(e));
         } finally {
@@ -273,19 +284,30 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                 </Group>
             </form>
 
-            <Tabs defaultValue="request" style={{flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column'}}>
+            <Tabs defaultValue="request" style={{flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column'}}
+                styles={{
+                    tab: {
+                        fontWeight: 600,
+                        fontSize: 'var(--mantine-font-size-sm)',
+                        padding: '8px 16px',
+                        transition: 'color 130ms ease, border-color 130ms ease',
+                        '&[data-active]': {
+                            color: 'var(--mantine-color-violet-2)',
+                            borderColor: 'var(--mantine-color-violet-4)',
+                        },
+                    },
+                }}>
                 <Tabs.List>
                     <Tabs.Tab value="request">Request</Tabs.Tab>
-                    <Tabs.Tab value="scripts" ml="auto">
-                        <Group gap={6} wrap="nowrap">
+                    <Tabs.Tab value="scripts">
+                        <Group gap={8} wrap="nowrap">
                             Scripts
-                            {preScript && postScript
-                                ? <Badge size="xs" variant="dot" color="violet">pre+post</Badge>
-                                : preScript
-                                    ? <Badge size="xs" variant="dot" color="violet">pre</Badge>
-                                    : postScript
-                                        ? <Badge size="xs" variant="dot" color="violet">post</Badge>
-                                        : null}
+                            {(preScript || postScript) &&
+                                <Badge size="xs" variant="light" color="violet" tt="none"
+                                    style={{fontWeight: 600}}>
+                                    {preScript && postScript ? 'pre + post'
+                                        : preScript ? 'pre' : 'post'}
+                                </Badge>}
                         </Group>
                     </Tabs.Tab>
                 </Tabs.List>
@@ -406,43 +428,56 @@ export function RequestView({selected, replay, variables, onSave, onSent}: Props
                 </Tabs.Panel>
 
                 <Tabs.Panel value="scripts" style={{flex: 1, minHeight: 0, overflow: 'auto'}} pt="sm">
-                    <Stack gap="md">
-                        <Stack gap="xs">
-                            <SectionLabel>Pre-request script</SectionLabel>
-                            <Text size="xs" c="dark.2">
-                                Runs before the HTTP call. Mutate <Text component="code" size="xs" fw={600} c="dark.1">request</Text> to change what gets sent.
-                            </Text>
-                            <CodeEditor
-                                key={(selected?.req.id ?? 'scratch') + '-pre'}
-                                value={preScript}
-                                onChange={setPreScript}
-                                placeholder={'// Set headers, rewrite the body, change the method…'}
-                                variables={variables}
-                                minHeight={80}
-                            />
-                            {response?.preScriptLog && response.preScriptLog.trim() ? (
-                                <ScriptLog text={response.preScriptLog}/>
-                            ) : null}
-                        </Stack>
-                        <Stack gap="xs">
-                            <SectionLabel>Post-response script</SectionLabel>
-                            <Text size="xs" c="dark.2">
-                                Runs after the response arrives. Mutate <Text component="code" size="xs" fw={600} c="dark.1">response</Text> to change what the UI shows,
-                                or call <Text component="code" size="xs" fw={600} c="dark.1">env.set("name", value)</Text> to extract values.
-                            </Text>
-                            <CodeEditor
-                                key={(selected?.req.id ?? 'scratch') + '-post'}
-                                value={postScript}
-                                onChange={setPostScript}
-                                placeholder={'// Inspect the response, set session variables…'}
-                                variables={variables}
-                                minHeight={80}
-                            />
-                            {response?.postScriptLog && response.postScriptLog.trim() ? (
-                                <ScriptLog text={response.postScriptLog}/>
-                            ) : null}
-                        </Stack>
-                    </Stack>
+                    <Accordion multiple value={open} onChange={setOpen} variant="separated"
+                        styles={{label: {paddingTop: 8, paddingBottom: 8}}}>
+                        <Accordion.Item value="pre-script">
+                            {sectionControl('Pre-request script', 0,
+                                preScript && <Badge size="xs" variant="light" color="violet">pre</Badge>)}
+                            <Accordion.Panel>
+                                <Stack gap="xs">
+                                    <Text size="sm" c="dark.1">
+                                        Runs before the HTTP call. Mutate <Text component="code" size="sm" fw={600} c="dark.0">request</Text> to change what gets sent.
+                                    </Text>
+                                    <CodeEditor
+                                        key={(selected?.req.id ?? 'scratch') + '-pre'}
+                                        value={preScript}
+                                        onChange={setPreScript}
+                                        placeholder={'// Set headers, rewrite the body, change the method…'}
+                                        variables={variables}
+                                        scriptApi
+                                        minHeight={160}
+                                    />
+                                    {response?.preScriptLog && response.preScriptLog.trim() ? (
+                                        <ScriptLog text={response.preScriptLog}/>
+                                    ) : null}
+                                </Stack>
+                            </Accordion.Panel>
+                        </Accordion.Item>
+                        <Accordion.Item value="post-script">
+                            {sectionControl('Post-response script', 0,
+                                postScript && <Badge size="xs" variant="light" color="violet">post</Badge>)}
+                            <Accordion.Panel>
+                                <Stack gap="xs">
+                                    <Text size="sm" c="dark.1">
+                                        Runs after the response arrives. Mutate <Text component="code" size="sm" fw={600} c="dark.0">response</Text> to change what the UI shows,
+                                        or call <Text component="code" size="sm" fw={600} c="dark.0">env.set("name", value)</Text> to extract values.
+                                    </Text>
+                                    <CodeEditor
+                                        key={(selected?.req.id ?? 'scratch') + '-post'}
+                                        value={postScript}
+                                        onChange={setPostScript}
+                                        placeholder={'// Inspect the response, set session variables…'}
+                                        variables={variables}
+                                        scriptApi
+                                        minHeight={160}
+                                    />
+                                    {response?.postScriptLog && response.postScriptLog.trim() ? (
+                                        <ScriptLog text={response.postScriptLog}/>
+                                    ) : null}
+                                </Stack>
+                            </Accordion.Panel>
+                        </Accordion.Item>
+                    </Accordion>
                 </Tabs.Panel>
             </Tabs>
 

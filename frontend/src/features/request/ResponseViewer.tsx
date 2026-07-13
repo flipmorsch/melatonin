@@ -7,12 +7,13 @@ import {CodeEditor} from '../../components/CodeEditor';
 interface Props {
     response: main.ResponseData | null;
     error: string;
+    /** Drops the Paper wrapper when rendered inside an accordion panel. */
+    compact?: boolean;
 }
 
-export function ResponseViewer({response, error}: Props) {
-    return (
-        <Paper withBorder radius="lg" p="sm" bg="dark.6"
-            style={{flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column'}}>
+export function ResponseViewer({response, error, compact}: Props) {
+    const body = (
+        <>
             {error &&
                 <Text size="sm" ff="monospace" c="red.4" style={{whiteSpace: 'pre-wrap'}}>{error}</Text>}
             {response && <>
@@ -56,6 +57,15 @@ export function ResponseViewer({response, error}: Props) {
             </>}
             {!response && !error &&
                 <Text size="sm" c="dark.2">Send a request to see the response here</Text>}
+        </>
+    );
+
+    if (compact) return body;
+
+    return (
+        <Paper withBorder radius="lg" p="sm" bg="dark.6"
+            style={{flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column'}}>
+            {body}
         </Paper>
     );
 }

@@ -60,6 +60,35 @@ const chrome = (variant: 'input' | 'fill', minHeight: number) => EditorView.them
     },
 }, {dark: true});
 
+/** Script API surface exposed to pre-request and post-response scripts.
+ *  Matches the globals injected by script.go:injectGlobals. */
+const SCRIPT_API = [
+    // request object
+    {label: 'request.method', type: 'property', detail: 'string — GET, POST, …'},
+    {label: 'request.url', type: 'property', detail: 'string'},
+    {label: 'request.headers', type: 'property', detail: '{key, value}[]'},
+    {label: 'request.body', type: 'property', detail: 'string'},
+    // response object (post-response only)
+    {label: 'response.status', type: 'property', detail: 'number'},
+    {label: 'response.statusText', type: 'property', detail: 'string'},
+    {label: 'response.headers', type: 'property', detail: 'string → string[]'},
+    {label: 'response.body', type: 'property', detail: 'string'},
+    {label: 'response.json()', type: 'method', detail: 'parse body as JSON'},
+    {label: 'response.finalUrl', type: 'property', detail: 'string'},
+    // env
+    {label: 'env.get(name)', type: 'method', detail: 'read environment variable'},
+    {label: 'env.set(name, value)', type: 'method', detail: 'write session variable'},
+    // console
+    {label: 'console.log(...)', type: 'method', detail: 'write to script log'},
+    {label: 'console.warn(...)', type: 'method', detail: 'write warning to script log'},
+    {label: 'console.error(...)', type: 'method', detail: 'write error to script log'},
+    // utilities
+    {label: 'fetch(url, opts?)', type: 'method', detail: 'async HTTP request → {status, json(), text()}'},
+    {label: 'atob(str)', type: 'method', detail: 'base64 decode'},
+    {label: 'btoa(str)', type: 'method', detail: 'base64 encode'},
+    {label: 'crypto.randomUUID()', type: 'method', detail: 'generate UUID v4'},
+    {label: 'sleep(ms)', type: 'method', detail: 'pause script (ms)'},
+];
 interface Props {
     value: string;
     onChange?: (value: string) => void;
@@ -71,6 +100,8 @@ interface Props {
     json?: boolean;
     /** Environment variable names offered after typing {{. */
     variables?: string[];
+    /** Enable script API autocomplete (request, response, env, console, …). */
+    scriptApi?: boolean;
     /** Fold arrows on objects/arrays (response viewer). */
     fold?: boolean;
     minHeight?: number;
@@ -81,7 +112,7 @@ interface Props {
 // the view is created once and only the doc and JSON mode are reconfigured.
 export function CodeEditor({
     value, onChange, placeholder, readOnly, variant = 'input',
-    json: jsonMode, variables, fold, minHeight = 90, style,
+    json: jsonMode, variables, scriptApi, fold, minHeight = 90, style,
 }: Props) {
     const hostRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
@@ -91,6 +122,8 @@ export function CodeEditor({
     onChangeRef.current = onChange;
     const varsRef = useRef<string[]>([]);
     varsRef.current = variables ?? [];
+    const scriptApiRef = useRef(scriptApi);
+    scriptApiRef.current = scriptApi;
 
     useEffect(() => {
         const varSource = (ctx: CompletionContext) => {
@@ -106,6 +139,23 @@ export function CodeEditor({
                 })),
             };
         };
+        const apiSource = (ctx: CompletionContext) => {
+            if (!scriptApiRef.current) return null;
+            const word = ctx.matchBefore(/[\w.]+/);
+            if (!word) return null;
+            const prefix = word.text.toLowerCase();
+            return {
+                from: word.from,
+                options: SCRIPT_API
+                    .filter(c => c.label.toLowerCase().startsWith(prefix))
+                    .map(c => ({
+                        label: c.label,
+                        type: c.type,
+                        detail: c.detail,
+                    })),
+            };
+        };
+
 
         const view = new EditorView({
             parent: hostRef.current!,
@@ -123,7 +173,7 @@ export function CodeEditor({
                         : [
                             history(),
                             closeBrackets(),
-                            autocompletion({override: [varSource]}),
+                            autocompletion({override: [varSource, apiSource]}),
                             keymap.of([
                                 ...closeBracketsKeymap, ...defaultKeymap,
                                 ...historyKeymap, ...completionKeymap,
