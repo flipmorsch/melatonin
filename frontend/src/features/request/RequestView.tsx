@@ -100,9 +100,11 @@ export function RequestView({tab, dispatch, variables, onSave, onSent, justLoade
             preRequestScript: preScript,
             postResponseScript: postScript,
         });
-        dispatch({type: 'SET_SAVE_STATE', saveState: 'saving'});
+        // 'saving' is flagged when the timer fires, not per keystroke — the
+        // reducer bails on the repeated 'dirty' above, so typing costs one render.
         const timer = window.setTimeout(() => {
             pendingRef.current = null;
+            dispatch({type: 'SET_SAVE_STATE', saveState: 'saving'});
             onSave(colId, req)
                 .then(() => dispatch({type: 'SET_SAVE_STATE', saveState: 'saved'}))
                 .catch(e => dispatch({type: 'SET_ERROR', error: String(e)}));

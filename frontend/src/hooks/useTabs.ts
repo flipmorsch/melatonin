@@ -169,6 +169,10 @@ function historyTabFrom(tabId: string, entry: main.HistoryEntry): TabState {
 
 function updateActiveTab(state: TabsState, patch: Partial<TabState>): TabsState {
     if (state.activeIdx < 0) return state;
+    const cur = state.tabs[state.activeIdx] as unknown as Record<string, unknown>;
+    // No-op patches return the same state so React skips the re-render —
+    // the auto-save effect re-dispatches 'dirty' on every keystroke.
+    if (Object.entries(patch).every(([k, v]) => Object.is(cur[k], v))) return state;
     const tabs = [...state.tabs];
     tabs[state.activeIdx] = {...tabs[state.activeIdx], ...patch};
     return {...state, tabs};

@@ -11,6 +11,16 @@ interface Props {
     routeFiltered?: boolean;
 }
 
+// Identity-based keys: once the log hits the cap it becomes a sliding window,
+// so positional keys would shift every trim and re-render all rows.
+let nextKey = 0;
+const keys = new WeakMap<main.MockLogEntry, number>();
+const keyOf = (e: main.MockLogEntry) => {
+    let k = keys.get(e);
+    if (k === undefined) keys.set(e, k = ++nextKey);
+    return k;
+};
+
 /** Incoming requests, newest first. Entries expand to show headers and body. */
 export function RequestLog({entries, running, routeFiltered}: Props) {
     if (entries.length === 0) {
@@ -24,8 +34,8 @@ export function RequestLog({entries, running, routeFiltered}: Props) {
     }
     return (
         <Box>
-            {[...entries].reverse().map((entry, i) =>
-                <Box key={entries.length - i}
+            {[...entries].reverse().map(entry =>
+                <Box key={keyOf(entry)}
                     style={{borderBottom: '1px solid var(--mantine-color-dark-5)'}} py={4}>
                     <details>
                         <summary className="log-summary" style={{cursor: 'pointer', listStyle: 'none'}}>

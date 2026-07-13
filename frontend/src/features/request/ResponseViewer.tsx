@@ -1,3 +1,4 @@
+import {useMemo} from 'react';
 import {ActionIcon, Code, Group, Paper, ScrollArea, Text} from '@mantine/core';
 import {ClipboardSetText} from '../../../wailsjs/runtime/runtime';
 import {main} from '../../../wailsjs/go/models';
@@ -12,6 +13,10 @@ interface Props {
 }
 
 export function ResponseViewer({response, error, compact}: Props) {
+    // Pretty-printing parses up to 5 MB of JSON — memoized so the per-keystroke
+    // re-renders of RequestView don't redo it while a response is on screen.
+    const pretty = useMemo(() => response ? prettyBody(response) : '', [response]);
+
     const body = (
         <>
             {error &&
@@ -33,7 +38,7 @@ export function ResponseViewer({response, error, compact}: Props) {
                         <Text ff="monospace" fz="sm" c="red.4">truncated at 20 MB</Text>}
                     <ActionIcon size="sm" variant="subtle" color="gray" ml="auto"
                         title="Copy response body"
-                        onClick={() => ClipboardSetText(prettyBody(response))}>⧉</ActionIcon>
+                        onClick={() => ClipboardSetText(pretty)}>⧉</ActionIcon>
                 </Group>
                 <details>
                     <summary style={{cursor: 'pointer', color: 'var(--mantine-color-dark-2)', fontSize: 'var(--mantine-font-size-sm)'}}>
@@ -45,7 +50,7 @@ export function ResponseViewer({response, error, compact}: Props) {
                 </details>
                 {isJsonBody(response)
                     ? <CodeEditor
-                        value={prettyBody(response)}
+                        value={pretty}
                         readOnly variant="fill" json fold
                         style={{flex: 1, minHeight: 0, marginTop: 4}}
                     />

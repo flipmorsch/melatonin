@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {memo, useCallback, useEffect, useRef, useState} from 'react';
 import {ActionIcon, Badge, Box, Menu, ScrollArea, Tooltip} from '@mantine/core';
 import {
     IconClock,
@@ -69,7 +69,10 @@ interface MenuState {
     actions: ContextAction[];
 }
 
-export function Sidebar(p: Props) {
+// memo: the tabs reducer lives in App, so every keystroke re-renders it; the
+// sidebar's props only change on real data/selection changes (App passes
+// useEvent-stable handlers to keep that true).
+export const Sidebar = memo(function Sidebar(p: Props) {
     const [historyCollapsed, setHistoryCollapsed] = useState(false);
     const sidebarRef = useRef<HTMLDivElement>(null);
     const [menu, setMenu] = useState<MenuState | null>(null);
@@ -250,4 +253,4 @@ export function Sidebar(p: Props) {
             </Menu>
         </Box>
     );
-}
+});

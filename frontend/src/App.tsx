@@ -1,4 +1,5 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
+import {flushSync} from 'react-dom';
 import {AppShell, Box, Button, Group, NativeSelect, Text} from '@mantine/core';
 import {main} from '../wailsjs/go/models';
 import {Brand} from './components/Brand';
@@ -12,6 +13,7 @@ import {useEnvironments} from './hooks/useEnvironments';
 import {useHistory} from './hooks/useHistory';
 import {useMocks} from './hooks/useMocks';
 import {useTabs} from './hooks/useTabs';
+import {useEvent} from './hooks/useEvent';
 import {TabStrip} from './features/tabs/TabStrip';
 import {TabCloseModal} from './features/tabs/TabCloseModal';
 import {CommandPalette, PaletteItem} from './components/CommandPalette';
@@ -91,31 +93,39 @@ function App() {
     };
 
     // ── Sidebar resize ──
-    const sidebarWidthRef = useRef(sidebarWidth);
-    useEffect(() => { sidebarWidthRef.current = sidebarWidth; }, [sidebarWidth]);
-    const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    // The drag drives the AppShell CSS vars directly — setState per mousemove
+    // re-rendered the whole shell (sidebar tree, tabs, editors) at 60Hz.
+    function handleResizeStart(e: React.MouseEvent) {
         e.preventDefault();
-        const navbar = (e.currentTarget as HTMLElement).closest('.mantine-AppShell-navbar') as HTMLElement | null;
-        if (navbar) navbar.style.transition = 'none';
+        const root = (e.currentTarget as HTMLElement).closest('.mantine-AppShell-root') as HTMLElement | null;
+        if (!root) return;
         const startX = e.clientX;
-        const startW = sidebarWidthRef.current;
+        const startW = sidebarWidth;
+        let w = startW;
+        root.dataset.resizing = 'true'; // Mantine zeroes its shell transitions on this
         const onMove = (ev: MouseEvent) => {
-            const w = Math.max(180, Math.min(500, startW + ev.clientX - startX));
-            setSidebarWidth(w);
+            w = Math.max(180, Math.min(500, startW + ev.clientX - startX));
+            root.style.setProperty('--app-shell-navbar-width', `${w}px`);
+            root.style.setProperty('--app-shell-navbar-offset', `${w}px`);
         };
         const onUp = () => {
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup', onUp);
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
-            if (navbar) navbar.style.transition = '';
-            localStorage.setItem('sidebarWidth', String(sidebarWidthRef.current));
+            // Commit synchronously, then drop the inline overrides so the
+            // state-driven width takes over without a one-frame snap-back.
+            flushSync(() => setSidebarWidth(w));
+            root.style.removeProperty('--app-shell-navbar-width');
+            root.style.removeProperty('--app-shell-navbar-offset');
+            delete root.dataset.resizing;
+            localStorage.setItem('sidebarWidth', String(w));
         };
         document.addEventListener('mousemove', onMove);
         document.addEventListener('mouseup', onUp);
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
-    }, []);
+    }
 
     // ── Keyboard shortcuts ──
     useEffect(() => {
@@ -246,6 +256,51 @@ function App() {
         })));
     }
 
+    // ── Sidebar handlers ──
+    // useEvent-stable identities so the memoized Sidebar only re-renders on
+    // data/selection changes, not on every keystroke of the tabs reducer.
+    const sidebarHandlers = {
+        onToggleCollapse: useEvent(() => setSidebarCollapsed(c => {
+            const n = !c; localStorage.setItem('sidebarCollapsed', String(n)); return n;
+        })),
+        onSelectRequest: useEvent(selectRequest),
+        onCreateCollection: useEvent((name: string) => run(cols.create(name))),
+        onDeleteCollection: useEvent((id: string) => run(cols.remove(id))),
+        onCreateFolder: useEvent((colId: string, parentId: string, name: string) =>
+            cols.createFolder(colId, parentId, name)),
+        onDeleteFolder: useEvent((colId: string, folderId: string) =>
+            cols.removeFolder(colId, folderId)),
+        onCountFolder: useEvent((colId: string, folderId: string) =>
+            cols.countFolder(colId, folderId)),
+        onAddRequest: useEvent((colId: string, parentFolderId?: string) =>
+            run(addRequest(colId, parentFolderId))),
+        onDeleteRequest: useEvent((colId: string, reqId: string) =>
+            run(cols.removeRequest(colId, reqId))),
+        onReorderRequest: useEvent((colId: string, reqId: string, newParentID: string, newPos: number) =>
+            run(cols.reorderRequest(colId, reqId, newParentID, newPos))),
+        onReorderFolder: useEvent((colId: string, folderId: string, newParentID: string, newPos: number) =>
+            run(cols.reorderFolder(colId, folderId, newParentID, newPos))),
+        onSelectMock: useEvent(selectMock),
+        onAddMock: useEvent(() => run(addMock())),
+        onDeleteMock: useEvent((id: string) => {
+            if (selectedMockId === id) {
+                setSelectedMockId('');
+                setSelectedRouteId(null);
+                setView('request');
+            }
+            run(mocks.remove(id));
+        }),
+        onSelectRoute: useEvent(selectRoute),
+        onAddRoute: useEvent((m: main.MockServer) => run(addRoute(m))),
+        onDeleteRoute: useEvent(deleteRoute),
+        onSelectHistory: useEvent(selectHistory),
+        onClearHistory: useEvent(() => {
+            setHistDetail(null);
+            if (view === 'history') setView('request');
+            run(hist.clear());
+        }),
+    };
+
     // ── selectedReqId for sidebar highlight ──
     const selectedReqId = view === 'request' && active?.type === 'saved'
         ? active.reqId ?? null : null;
@@ -283,53 +338,15 @@ function App() {
                 <Box style={{position: 'relative', height: '100%'}}>
                     <Sidebar
                         collapsed={sidebarCollapsed}
-                        onToggleCollapse={() => setSidebarCollapsed(c => {
-                            const n = !c; localStorage.setItem('sidebarCollapsed', String(n)); return n;
-                        })}
                         collections={cols.collections}
                         selectedReqId={selectedReqId}
-                        onSelectRequest={selectRequest}
-                        onCreateCollection={name => run(cols.create(name))}
-                        onDeleteCollection={id => run(cols.remove(id))}
-                        onCreateFolder={(colId, parentId, name) =>
-                            cols.createFolder(colId, parentId, name)}
-                        onDeleteFolder={(colId, folderId) =>
-                            cols.removeFolder(colId, folderId)}
-                        onCountFolder={(colId, folderId) =>
-                            cols.countFolder(colId, folderId)}
-                        onAddRequest={(colId, parentFolderId?) =>
-                            run(addRequest(colId, parentFolderId))}
-                        onDeleteRequest={(colId, reqId) =>
-                            run(cols.removeRequest(colId, reqId))}
-                        onReorderRequest={(colId, reqId, newParentID, newPos) =>
-                            run(cols.reorderRequest(colId, reqId, newParentID, newPos))}
-                        onReorderFolder={(colId, folderId, newParentID, newPos) =>
-                            run(cols.reorderFolder(colId, folderId, newParentID, newPos))}
                         mocks={mocks.mocks}
                         running={mocks.running}
                         selectedMockId={view === 'mock' ? selectedMockId : null}
                         selectedRouteId={view === 'mock' ? selectedRouteId : null}
-                        onSelectMock={selectMock}
-                        onAddMock={() => run(addMock())}
-                        onDeleteMock={id => {
-                            if (selectedMockId === id) {
-                                setSelectedMockId('');
-                                setSelectedRouteId(null);
-                                setView('request');
-                            }
-                            run(mocks.remove(id));
-                        }}
-                        onSelectRoute={selectRoute}
-                        onAddRoute={m => run(addRoute(m))}
-                        onDeleteRoute={deleteRoute}
                         history={hist.entries}
                         selectedHistoryId={selectedHistoryId}
-                        onSelectHistory={selectHistory}
-                        onClearHistory={() => {
-                            setHistDetail(null);
-                            if (view === 'history') setView('request');
-                            run(hist.clear());
-                        }}
+                        {...sidebarHandlers}
                     />
                     {!sidebarCollapsed && (
                         <Box onMouseDown={handleResizeStart} style={{
