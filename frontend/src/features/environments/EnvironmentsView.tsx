@@ -68,6 +68,7 @@ export function EnvironmentsView({envSet, onSave, onDelete}: Props) {
                     {environments.map(env =>
                         <SidebarRow
                             key={env.id}
+                            rowId={`env:${env.id}`}
                             selected={selectedId === env.id}
                             onClick={() => select(env)}
                             label={env.name}

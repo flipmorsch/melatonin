@@ -69,9 +69,12 @@
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.04em;
-    padding: 2px 6px;
+    padding: 2px 0;
     border-radius: 4px;
     flex-shrink: 0;
+    display: inline-flex;
+    justify-content: center;
+    width: 52px;
     color: var(--m-neutral);
     background: color-mix(in srgb, var(--m-neutral) 12%, transparent);
 }
@@ -106,22 +109,89 @@
     .dot.on { animation: none; }
 }
 
-/* ---------- shared micro-patterns ---------- */
+/* ---------- sidebar rows ---------- */
 
-/* placeholders must hit 4.5:1 like body text — Mantine's default is too dim */
-input::placeholder, textarea::placeholder {
-    color: var(--mantine-color-dark-2) !important;
-}
-
-/* delete buttons on list rows reveal on hover */
-.hover-row:hover .row-reveal, .hover-row:focus-within .row-reveal { visibility: visible; }
-
-/* sidebar / list rows */
 .side-row {
     transition: background 130ms ease;
+    cursor: default;
 }
 
-.side-row:hover { background: var(--mantine-color-dark-5); }
+.side-row:hover {
+    background: var(--mantine-color-dark-5);
+}
+
+/* action buttons on rows reveal on row hover */
+.side-row .row-reveal {
+    visibility: hidden;
+}
+.side-row:hover .row-reveal,
+.side-row:focus-within .row-reveal {
+    visibility: visible;
+}
+
+/* keyboard focus ring for sidebar rows */
+[data-sidebar-row]:focus-visible {
+    outline: 2px solid var(--mantine-color-violet-4);
+    outline-offset: -2px;
+    border-radius: var(--mantine-radius-sm);
+}
+
+/* ---------- collapsed sidebar icon strip ---------- */
+
+.side-icon-btn {
+    transition: color 130ms ease, background 130ms ease;
+}
+.side-icon-btn:hover {
+    color: var(--mantine-color-violet-2);
+    background: var(--mantine-color-dark-5);
+}
+
+.side-icon-dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--mantine-color-dark-3);
+    margin-bottom: 2px;
+}
+.side-icon-dot.on {
+    background: var(--ok);
+    box-shadow: 0 0 4px var(--ok);
+}
+
+/* ---------- sidebar collapse transition ---------- */
+
+.mantine-AppShell-navbar {
+    transition: width 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mantine-AppShell-navbar { transition: none; }
+}
+
+/* ---------- chevron rotation ---------- */
+
+.chevron {
+    transition: transform 150ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+.chevron.open {
+    transform: rotate(90deg);
+}
+
+/* ---------- tree connector lines ---------- */
+
+.tree-row {
+    position: relative;
+}
+.tree-row::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: -8px;
+    width: 8px;
+    height: 0;
+    border-top: 1px solid color-mix(in srgb, var(--mantine-color-violet-4) 30%, var(--mantine-color-dark-4));
+}
+
 
 /* request log rows: hover shows the row is expandable */
 .log-summary {
@@ -141,18 +211,4 @@ input::placeholder, textarea::placeholder {
 [data-mantine-button]:focus-visible {
     outline: 2px solid var(--mantine-color-violet-4);
     outline-offset: 2px;
-}
-
-/* Tree connector lines for folder hierarchy */
-.tree-row {
-    position: relative;
-}
-.tree-row::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: -8px;
-    width: 8px;
-    height: 0;
-    border-top: 1px solid var(--mantine-color-dark-4);
 }

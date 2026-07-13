@@ -31,6 +31,7 @@ function App() {
     const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
     const [shellError, setShellError] = useState('');
     const [paletteOpen, setPaletteOpen] = useState(false);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
     const environments = envs.envSet?.environments ?? [];
     const variables = Object.keys(
@@ -183,7 +184,7 @@ function App() {
     }
 
     return (
-        <AppShell header={{height: 52}} navbar={{width: 260, breakpoint: 0}} padding="md">
+        <AppShell header={{height: 52}} navbar={{width: sidebarCollapsed ? 48 : 260, breakpoint: 0}} padding="md">
             <AppShell.Header className="topbar" withBorder={false} px="md">
                 <Group justify="space-between" h="100%">
                     <Brand/>
@@ -209,6 +210,8 @@ function App() {
 
             <AppShell.Navbar withBorder>
                 <Sidebar
+                    collapsed={sidebarCollapsed}
+                    onToggleCollapse={() => setSidebarCollapsed(c => !c)}
                     collections={cols.collections}
                     selectedReqId={view === 'request' ? selected?.req.id ?? null : null}
                     onSelectRequest={selectRequest}

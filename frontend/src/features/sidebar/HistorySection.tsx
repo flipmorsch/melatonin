@@ -36,7 +36,7 @@ function outcome(e: main.HistoryEntry) {
 
 export function HistorySection(p: Props) {
     return (
-        <Box mt="lg">
+        <Box mt="md">
             <Group justify="space-between" px="xs" mb={4}>
                 <SectionLabel>History</SectionLabel>
                 <Group gap={4}>
@@ -58,9 +58,9 @@ export function HistorySection(p: Props) {
             {!p.collapsed && p.entries.map(e =>
                 <SidebarRow
                     key={e.id}
+                    rowId={`hist:${e.id}`}
                     selected={p.selectedId === e.id}
                     onClick={() => p.onSelect(e)}
-                    left={<MethodBadge method={e.request.method}/>}
                     label={pathOf(e.request.url)}
                     right={<>
                         {outcome(e)}

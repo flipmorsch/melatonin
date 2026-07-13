@@ -44,7 +44,7 @@ export function MocksSection(p: Props) {
     }
 
     return (
-        <Box mt="lg">
+        <Box mt="md">
             <Group justify="space-between" px="xs" mb={4}>
                 <SectionLabel>Mock Servers</SectionLabel>
                 <ActionIcon size="sm" variant="subtle" color="gray" title="New mock server"
@@ -61,17 +61,19 @@ export function MocksSection(p: Props) {
                 return (
                     <Box key={m.id}>
                         <SidebarRow
+                            rowId={`mock:${m.id}`}
                             selected={p.selectedMockId === m.id && p.selectedRouteId === null}
                             onClick={() => p.onSelect(m)}
+                            onDelete={() => p.onDelete(m.id)}
+                            contextActions={[{label: 'Delete', color: 'red', onClick: () => p.onDelete(m.id)}]}
                             leading={
                                 <UnstyledButton
                                     pl={8} py={4}
                                     aria-label={open ? 'Collapse routes' : 'Expand routes'}
                                     onClick={() => toggle(m.id)}
                                     style={{display: 'flex', alignItems: 'center'}}>
-                                    {open
-                                        ? <IconChevronDown size={18}/>
-                                        : <IconChevronRight size={18}/>}
+                                    <IconChevronRight size={18}
+                                        className={`chevron${open ? ' open' : ''}`}/>
                                 </UnstyledButton>}
                             left={<RunDot on={p.running[m.id] !== undefined}/>}
                             label={m.name}
@@ -89,9 +91,12 @@ export function MocksSection(p: Props) {
                         {open && (m.routes ?? []).map(r =>
                             <SidebarRow
                                 key={r.id}
+                                rowId={`route:${m.id}:${r.id}`}
                                 depth={1}
                                 selected={p.selectedRouteId === r.id}
                                 onClick={() => p.onSelectRoute(m, r.id)}
+                                onDelete={() => p.onDeleteRoute(m, r.id)}
+                                contextActions={[{label: 'Delete', color: 'red', onClick: () => p.onDeleteRoute(m, r.id)}]}
                                 left={<MethodBadge method={r.method}/>}
                                 label={r.path}
                                 right={<span className="row-reveal">

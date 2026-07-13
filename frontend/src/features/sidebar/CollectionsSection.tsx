@@ -66,8 +66,8 @@ export function CollectionsSection(p: Props) {
                     <UnstyledButton onClick={() => toggle(folderKey)}
                         style={{flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 4}}>
                         {isCollapsed
-                            ? <IconChevronRight size={18} style={{flexShrink: 0}}/>
-                            : <IconChevronDown size={18} style={{flexShrink: 0}}/>}
+                            ? <IconChevronRight size={18} className="chevron" style={{flexShrink: 0}}/>
+                            : <IconChevronDown size={18} className="chevron open" style={{flexShrink: 0}}/>}
                         <Text size="xs" c="dark.2" truncate>{folder.name}</Text>
                     </UnstyledButton>
                     <ActionIcon size="sm" variant="subtle" color="gray" title="New request"
@@ -111,9 +111,12 @@ export function CollectionsSection(p: Props) {
                         {folder.requests.map(req =>
                             <Box key={req.id} className="tree-row">
                                 <SidebarRow
+                                    rowId={`req:${req.id}`}
                                     depth={0}
                                     selected={p.selectedReqId === req.id}
                                     onClick={() => p.onSelect(colId, req)}
+                                    onDelete={() => p.onDeleteRequest(colId, req.id)}
+                                    contextActions={[{label: 'Delete', color: 'red', onClick: () => p.onDeleteRequest(colId, req.id)}]}
                                     left={<MethodBadge method={req.method}/>}
                                     label={req.name}
                                     right={<span className="row-reveal">
@@ -148,6 +151,7 @@ export function CollectionsSection(p: Props) {
                     onChange={e => setFilter(e.target.value)}
                     placeholder="Filter requests…"
                     aria-label="Filter requests"
+                    data-sidebar-filter=""
                 />}
 
             {newColName !== null &&
@@ -174,12 +178,15 @@ export function CollectionsSection(p: Props) {
 
             {filtered.map(col =>
                 <Box key={col.id} mb="sm">
-                    <Group gap={2} px="xs" className="hover-row" wrap="nowrap">
+                    <Group gap={2} px={4} py={3} className="side-row" wrap="nowrap"
+                        data-sidebar-row={`col:${col.id}`} tabIndex={-1}
+                        style={{minHeight: 32, borderRadius: 'var(--mantine-radius-sm)'}}>
                         <UnstyledButton onClick={() => toggle(col.id)}
-                            style={{flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 4}}>
+                            style={{flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 4}}
+                            tabIndex={-1}>
                             {collapsed.has(col.id)
-                                ? <IconChevronRight size={18} style={{flexShrink: 0}}/>
-                                : <IconChevronDown size={18} style={{flexShrink: 0}}/>}
+                                ? <IconChevronRight size={18} className="chevron" style={{flexShrink: 0}}/>
+                                : <IconChevronDown size={18} className="chevron open" style={{flexShrink: 0}}/>}
                             <Text size="sm" fw={700} c="dark.1" truncate style={{flex: 1}}>
                                 {col.name}
                             </Text>
@@ -214,9 +221,12 @@ export function CollectionsSection(p: Props) {
                         {col.requests.map(req =>
                             <SidebarRow
                                 key={req.id}
+                                rowId={`req:${req.id}`}
                                 depth={0}
                                 selected={p.selectedReqId === req.id}
                                 onClick={() => p.onSelect(col.id, req)}
+                                onDelete={() => p.onDeleteRequest(col.id, req.id)}
+                                contextActions={[{label: 'Delete', color: 'red', onClick: () => p.onDeleteRequest(col.id, req.id)}]}
                                 left={<MethodBadge method={req.method}/>}
                                 label={req.name}
                                 right={<span className="row-reveal">
