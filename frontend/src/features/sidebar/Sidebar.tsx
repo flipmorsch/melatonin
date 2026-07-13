@@ -196,42 +196,48 @@ export const Sidebar = memo(function Sidebar(p: Props) {
                 </Tooltip>
             </Box>
 
-            <ScrollArea h="100%" px="xs" type="never" style={{flex: 1}}>
+            <ScrollArea h="100%" px="xs" type="never" className="side-scroll" style={{flex: 1}}>
                 <div ref={sidebarRef} tabIndex={-1} data-sidebar-container style={{outline: 'none'}}>
-                    <CollectionsSection
-                        collections={p.collections}
-                        selectedReqId={p.selectedReqId}
-                        onSelect={p.onSelectRequest}
-                        onCreateCollection={p.onCreateCollection}
-                        onDeleteCollection={p.onDeleteCollection}
-                        onCreateFolder={p.onCreateFolder}
-                        onDeleteFolder={p.onDeleteFolder}
-                        onCountFolder={p.onCountFolder}
-                        onAddRequest={p.onAddRequest}
-                        onDeleteRequest={p.onDeleteRequest}
-                        onReorderRequest={p.onReorderRequest}
-                        onReorderFolder={p.onReorderFolder}
-                    />
-                    <MocksSection
-                        mocks={p.mocks}
-                        running={p.running}
-                        selectedMockId={p.selectedMockId}
-                        selectedRouteId={p.selectedRouteId}
-                        onSelect={p.onSelectMock}
-                        onAdd={p.onAddMock}
-                        onDelete={p.onDeleteMock}
-                        onSelectRoute={p.onSelectRoute}
-                        onAddRoute={p.onAddRoute}
-                        onDeleteRoute={p.onDeleteRoute}
-                    />
-                    <HistorySection
-                        entries={p.history}
-                        selectedId={p.selectedHistoryId}
-                        collapsed={historyCollapsed}
-                        onToggle={() => setHistoryCollapsed(c => !c)}
-                        onSelect={p.onSelectHistory}
-                        onClear={p.onClearHistory}
-                    />
+                    <div className="side-sec">
+                        <CollectionsSection
+                            collections={p.collections}
+                            selectedReqId={p.selectedReqId}
+                            onSelect={p.onSelectRequest}
+                            onCreateCollection={p.onCreateCollection}
+                            onDeleteCollection={p.onDeleteCollection}
+                            onCreateFolder={p.onCreateFolder}
+                            onDeleteFolder={p.onDeleteFolder}
+                            onCountFolder={p.onCountFolder}
+                            onAddRequest={p.onAddRequest}
+                            onDeleteRequest={p.onDeleteRequest}
+                            onReorderRequest={p.onReorderRequest}
+                            onReorderFolder={p.onReorderFolder}
+                        />
+                    </div>
+                    <div className="side-sec">
+                        <MocksSection
+                            mocks={p.mocks}
+                            running={p.running}
+                            selectedMockId={p.selectedMockId}
+                            selectedRouteId={p.selectedRouteId}
+                            onSelect={p.onSelectMock}
+                            onAdd={p.onAddMock}
+                            onDelete={p.onDeleteMock}
+                            onSelectRoute={p.onSelectRoute}
+                            onAddRoute={p.onAddRoute}
+                            onDeleteRoute={p.onDeleteRoute}
+                        />
+                    </div>
+                    <div className="side-sec">
+                        <HistorySection
+                            entries={p.history}
+                            selectedId={p.selectedHistoryId}
+                            collapsed={historyCollapsed}
+                            onToggle={() => setHistoryCollapsed(c => !c)}
+                            onSelect={p.onSelectHistory}
+                            onClear={p.onClearHistory}
+                        />
+                    </div>
                 </div>
             </ScrollArea>
 

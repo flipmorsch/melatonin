@@ -339,7 +339,7 @@ export function CollectionsSection(p: Props) {
             onDragCancel={() => setActiveId(null)}
         >
             <Box>
-                <Group justify="space-between" px="xs" mb={4}>
+                <Group justify="space-between" px="xs" mb={4} className="side-sec-head">
                     <SectionLabel>Collections</SectionLabel>
                     <ActionIcon size="sm" variant="subtle" color="gray" title="New collection"
                         onClick={() => setNewColName(newColName === null ? '' : null)}>

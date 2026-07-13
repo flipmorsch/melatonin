@@ -26,6 +26,9 @@
     /* brand alpha tokens */
     --selected-bg: color-mix(in srgb, var(--mantine-color-violet-4) 16%, transparent);
     --selection-bg: color-mix(in srgb, var(--mantine-color-violet-4) 25%, transparent);
+
+    /* sidebar spacing scale — 1 = Mantine default, tuned airier */
+    --side-density: 1.1;
 }
 
 ::selection { background: var(--selection-bg); }
@@ -136,6 +139,38 @@
     outline: 2px solid var(--mantine-color-violet-4);
     outline-offset: -2px;
     border-radius: var(--mantine-radius-sm);
+}
+
+/* ---------- sidebar sections: anchored headers ---------- */
+
+/* density re-scales Mantine spacing inside the sidebar scroll only */
+.side-scroll {
+    --mantine-spacing-xs: calc(0.625rem * var(--side-density));
+    --mantine-spacing-sm: calc(0.75rem * var(--side-density));
+    --mantine-spacing-md: calc(1rem * var(--side-density));
+    --mantine-spacing-lg: calc(1.25rem * var(--side-density));
+}
+
+/* !important: rows size themselves inline (minHeight: 32) */
+.side-scroll .side-row {
+    min-height: calc(30px * var(--side-density)) !important;
+}
+
+.side-sec + .side-sec {
+    margin-top: calc(26px * var(--side-density));
+    border-top: 1px solid var(--mantine-color-dark-4);
+    padding-top: calc(8px * var(--side-density));
+}
+
+/* section headers pin to the top of the scroll while their section passes */
+.side-sec-head {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--mantine-color-body);
+    padding-top: calc(4px * var(--side-density));
+    padding-bottom: calc(4px * var(--side-density));
+    box-shadow: 0 8px 10px -10px rgba(0, 0, 0, 0.7);
 }
 
 /* ---------- collapsed sidebar icon strip ---------- */

@@ -36,8 +36,8 @@ function outcome(e: main.HistoryEntry) {
 
 export function HistorySection(p: Props) {
     return (
-        <Box mt="lg">
-            <Group justify="space-between" px="xs" mb={4}>
+        <Box>
+            <Group justify="space-between" px="xs" mb={4} className="side-sec-head">
                 <SectionLabel>History</SectionLabel>
                 <Group gap={4}>
                     {p.entries.length > 0 &&

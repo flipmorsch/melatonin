@@ -44,8 +44,8 @@ export function MocksSection(p: Props) {
     }
 
     return (
-        <Box mt="lg">
-            <Group justify="space-between" px="xs" mb={4}>
+        <Box>
+            <Group justify="space-between" px="xs" mb={4} className="side-sec-head">
                 <SectionLabel>Mock Servers</SectionLabel>
                 <ActionIcon size="sm" variant="subtle" color="gray" title="New mock server"
                     onClick={p.onAdd}>
