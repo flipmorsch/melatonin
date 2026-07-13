@@ -7,6 +7,11 @@ export interface ContextAction {
     onClick: () => void;
 }
 
+/** Opens the single sidebar-level Menu (rendered in Sidebar) at a screen point. */
+export function openSidebarMenu(x: number, y: number, actions: ContextAction[]) {
+    window.dispatchEvent(new CustomEvent('sidebar-contextmenu', {detail: {x, y, actions}}));
+}
+
 interface Props {
     label: string;
     /** Stable id for keyboard navigation focus tracking. */
@@ -52,11 +57,8 @@ export function SidebarRow({label, rowId, left, leading, right, selected, depth,
     const handleContextMenu = useCallback((e: React.MouseEvent) => {
         if (!contextActions || contextActions.length === 0) return;
         e.preventDefault();
-        // The parent Sidebar reads this event and positions a single Menu.
-        // We dispatch a custom event so the sidebar-level handler can pick it up.
-        const detail = {x: e.clientX, y: e.clientY, actions: contextActions, rowId};
-        window.dispatchEvent(new CustomEvent('sidebar-contextmenu', {detail}));
-    }, [contextActions, rowId]);
+        openSidebarMenu(e.clientX, e.clientY, contextActions);
+    }, [contextActions]);
 
     return (
         <Box
