@@ -69,7 +69,7 @@ export function ResponseViewer({response, error, compact}: Props) {
 
     return (
         <Paper withBorder radius="lg" p="sm" bg="dark.6"
-            style={{flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column'}}>
+            style={{flex: 1, minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column'}}>
             {body}
         </Paper>
     );

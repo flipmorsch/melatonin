@@ -1,6 +1,6 @@
 import {ReactNode, useEffect, useRef} from 'react';
 import {
-    Accordion, ActionIcon, Badge, Button, Checkbox, Group,
+    Accordion, ActionIcon, Badge, Box, Button, Checkbox, Group,
     NativeSelect, NumberInput, PasswordInput, Stack, Tabs, Text, TextInput,
 } from '@mantine/core';
 import {SendRequest} from '../../../wailsjs/go/main/App';
@@ -223,6 +223,9 @@ export function RequestView({tab, dispatch, variables, onSave, onSent, justLoade
                 </Group>
             </form>
 
+            {/* Split layout: composer left, response right (accepted live variant) */}
+            <Group gap="md" align="stretch" wrap="nowrap" style={{flex: 1, minHeight: 0}}>
+            <Box style={{flex: '0 0 50%', minWidth: 0, display: 'flex', flexDirection: 'column'}}>
             <Tabs defaultValue="request" style={{flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column'}}
                 styles={{
                     tab: {
@@ -419,8 +422,9 @@ export function RequestView({tab, dispatch, variables, onSave, onSent, justLoade
                     </Accordion>
                 </Tabs.Panel>
             </Tabs>
-
+            </Box>
             <ResponseViewer response={response} error={error}/>
+            </Group>
         </Stack>
     );
 }
