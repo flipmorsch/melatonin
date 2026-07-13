@@ -480,6 +480,31 @@ func TestMoveFolderInFolder(t *testing.T) {
 	}
 }
 
+func TestMoveToRoot(t *testing.T) {
+	a := testApp(t)
+	col, _ := a.CreateCollection("Test")
+	parent, _ := a.CreateFolder(col.ID, "", "parent")
+	nested, _ := a.CreateFolder(col.ID, parent.ID, "nested")
+	req, _ := a.SaveRequest(col.ID, SavedRequest{Name: "R", Method: "GET", URL: "http://x"}, parent.ID)
+
+	if err := a.MoveRequest(col.ID, req.ID, "root", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.MoveFolder(col.ID, nested.ID, "root", 0); err != nil {
+		t.Fatal(err)
+	}
+	cols, _ := a.ListCollections()
+	if len(cols[0].Requests) != 1 || cols[0].Requests[0].Name != "R" {
+		t.Fatalf("request not at root: %v", names(cols[0].Requests))
+	}
+	if len(cols[0].Folders) != 2 || cols[0].Folders[0].Name != "nested" {
+		t.Fatalf("folder not at root position 0: %v", folderNames(cols[0].Folders))
+	}
+	if len(cols[0].Folders[1].Folders) != 0 || len(cols[0].Folders[1].Requests) != 0 {
+		t.Fatal("parent folder should be empty after moves to root")
+	}
+}
+
 func TestNewRequestPosition(t *testing.T) {
 	a := testApp(t)
 	col, _ := a.CreateCollection("Test")

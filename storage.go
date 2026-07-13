@@ -544,7 +544,8 @@ func deleteFolderFromSlice(parent *FolderNode, id string) bool {
 
 // MoveRequest changes a request's position and optionally its parent.
 // newParentID == "" keeps the current parent; the position is changed within it.
-// newParentID != "" extracts the request and inserts it into that folder.
+// newParentID == "root" moves the request to the collection root.
+// Any other newParentID extracts the request and inserts it into that folder.
 func (a *App) MoveRequest(collectionID, requestID, newParentID string, newPosition int) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -568,6 +569,10 @@ func (a *App) MoveRequest(collectionID, requestID, newParentID string, newPositi
 	req, ok := extractRequestFromTree(c, requestID)
 	if !ok {
 		return fmt.Errorf("request %s not found in collection %s", requestID, collectionID)
+	}
+	if newParentID == "root" {
+		insertAt(&c.Requests, req, newPosition, savedReqSetPos)
+		return a.writeCollection(c)
 	}
 	target := findFolderNode(c, newParentID)
 	if target == nil {
@@ -674,6 +679,8 @@ func insertAt[T any](slice *[]T, elem T, pos int, setPos func(*T, int)) {
 }
 
 // MoveFolder changes a folder's position and optionally its parent.
+// newParentID follows MoveRequest semantics: "" reorders within the current
+// parent, "root" moves to the collection root, anything else is a folder ID.
 func (a *App) MoveFolder(collectionID, folderID, newParentID string, newPosition int) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -700,6 +707,10 @@ func (a *App) MoveFolder(collectionID, folderID, newParentID string, newPosition
 	f, ok := extractFolderFromTree(c, folderID)
 	if !ok {
 		return fmt.Errorf("folder %s not found in collection %s", folderID, collectionID)
+	}
+	if newParentID == "root" {
+		insertAt(&c.Folders, f, newPosition, folderNodeSetPos)
+		return a.writeCollection(c)
 	}
 	target := findFolderNode(c, newParentID)
 	if target == nil {
