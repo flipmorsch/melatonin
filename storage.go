@@ -80,6 +80,13 @@ type Collection struct {
 	Requests []SavedRequest `json:"requests"`
 }
 
+// ---------- position helpers (shared by generic moveInSlice/insertAt) ----------
+
+func savedReqID(r SavedRequest) string      { return r.ID }
+func savedReqSetPos(r *SavedRequest, i int) { r.Position = i }
+func folderNodeID(f FolderNode) string      { return f.ID }
+func folderNodeSetPos(f *FolderNode, i int) { f.Position = i }
+
 // ---------- legacy types for v1 migration ----------
 
 // legacySavedRequest is the pre-tree format with a flat Folder string.
@@ -547,7 +554,7 @@ func (a *App) MoveRequest(collectionID, requestID, newParentID string, newPositi
 	}
 	if newParentID == "" {
 		// Within-parent reorder — keep existing logic.
-		if moveRequestInSlice(&c.Requests, requestID, newPosition) {
+		if moveInSlice(&c.Requests, requestID, newPosition, savedReqID, savedReqSetPos) {
 			return a.writeCollection(c)
 		}
 		for i := range c.Folders {
@@ -566,14 +573,16 @@ func (a *App) MoveRequest(collectionID, requestID, newParentID string, newPositi
 	if target == nil {
 		return fmt.Errorf("parent folder %s not found", newParentID)
 	}
-	insertRequestAt(&target.Requests, req, newPosition)
+	insertAt(&target.Requests, req, newPosition, savedReqSetPos)
 	return a.writeCollection(c)
 }
 
-func moveRequestInSlice(reqs *[]SavedRequest, id string, pos int) bool {
+// moveInSlice reorders the element with the given id to position pos,
+// renumbering all positions afterwards. Returns false if not found.
+func moveInSlice[T any](slice *[]T, id string, pos int, idOf func(T) string, setPos func(*T, int)) bool {
 	idx := -1
-	for i, req := range *reqs {
-		if req.ID == id {
+	for i, elem := range *slice {
+		if idOf(elem) == id {
 			idx = i
 			break
 		}
@@ -581,23 +590,23 @@ func moveRequestInSlice(reqs *[]SavedRequest, id string, pos int) bool {
 	if idx < 0 {
 		return false
 	}
-	req := (*reqs)[idx]
-	*reqs = append((*reqs)[:idx], (*reqs)[idx+1:]...)
+	elem := (*slice)[idx]
+	*slice = append((*slice)[:idx], (*slice)[idx+1:]...)
 	if pos < 0 {
 		pos = 0
 	}
-	if pos > len(*reqs) {
-		pos = len(*reqs)
+	if pos > len(*slice) {
+		pos = len(*slice)
 	}
-	*reqs = append((*reqs)[:pos], append([]SavedRequest{req}, (*reqs)[pos:]...)...)
-	for i := range *reqs {
-		(*reqs)[i].Position = i
+	*slice = append((*slice)[:pos], append([]T{elem}, (*slice)[pos:]...)...)
+	for i := range *slice {
+		setPos(&(*slice)[i], i)
 	}
 	return true
 }
 
 func moveRequestInFolder(f *FolderNode, id string, pos int) bool {
-	if moveRequestInSlice(&f.Requests, id, pos) {
+	if moveInSlice(&f.Requests, id, pos, savedReqID, savedReqSetPos) {
 		return true
 	}
 	for i := range f.Folders {
@@ -608,34 +617,8 @@ func moveRequestInFolder(f *FolderNode, id string, pos int) bool {
 	return false
 }
 
-func moveFolderInSlice(folders *[]FolderNode, id string, pos int) bool {
-	idx := -1
-	for i, f := range *folders {
-		if f.ID == id {
-			idx = i
-			break
-		}
-	}
-	if idx < 0 {
-		return false
-	}
-	f := (*folders)[idx]
-	*folders = append((*folders)[:idx], (*folders)[idx+1:]...)
-	if pos < 0 {
-		pos = 0
-	}
-	if pos > len(*folders) {
-		pos = len(*folders)
-	}
-	*folders = append((*folders)[:pos], append([]FolderNode{f}, (*folders)[pos:]...)...)
-	for i := range *folders {
-		(*folders)[i].Position = i
-	}
-	return true
-}
-
 func moveFolderInFolder(f *FolderNode, id string, pos int) bool {
-	if moveFolderInSlice(&f.Folders, id, pos) {
+	if moveInSlice(&f.Folders, id, pos, folderNodeID, folderNodeSetPos) {
 		return true
 	}
 	for i := range f.Folders {
@@ -676,16 +659,17 @@ func extractRequestFromFolder(f *FolderNode, id string) (SavedRequest, bool) {
 	return SavedRequest{}, false
 }
 
-func insertRequestAt(reqs *[]SavedRequest, req SavedRequest, pos int) {
+// insertAt inserts elem at pos within slice, renumbering all positions afterwards.
+func insertAt[T any](slice *[]T, elem T, pos int, setPos func(*T, int)) {
 	if pos < 0 {
 		pos = 0
 	}
-	if pos > len(*reqs) {
-		pos = len(*reqs)
+	if pos > len(*slice) {
+		pos = len(*slice)
 	}
-	*reqs = append((*reqs)[:pos], append([]SavedRequest{req}, (*reqs)[pos:]...)...)
-	for i := range *reqs {
-		(*reqs)[i].Position = i
+	*slice = append((*slice)[:pos], append([]T{elem}, (*slice)[pos:]...)...)
+	for i := range *slice {
+		setPos(&(*slice)[i], i)
 	}
 }
 
@@ -699,7 +683,7 @@ func (a *App) MoveFolder(collectionID, folderID, newParentID string, newPosition
 	}
 	if newParentID == "" {
 		// Within-parent reorder.
-		if moveFolderInSlice(&c.Folders, folderID, newPosition) {
+		if moveInSlice(&c.Folders, folderID, newPosition, folderNodeID, folderNodeSetPos) {
 			return a.writeCollection(c)
 		}
 		for i := range c.Folders {
@@ -721,7 +705,7 @@ func (a *App) MoveFolder(collectionID, folderID, newParentID string, newPosition
 	if target == nil {
 		return fmt.Errorf("parent folder %s not found", newParentID)
 	}
-	insertFolderAt(&target.Folders, f, newPosition)
+	insertAt(&target.Folders, f, newPosition, folderNodeSetPos)
 	return a.writeCollection(c)
 }
 
@@ -749,19 +733,6 @@ func extractFolderFromFolderNode(f *FolderNode, id string) (FolderNode, bool) {
 		}
 	}
 	return FolderNode{}, false
-}
-
-func insertFolderAt(folders *[]FolderNode, f FolderNode, pos int) {
-	if pos < 0 {
-		pos = 0
-	}
-	if pos > len(*folders) {
-		pos = len(*folders)
-	}
-	*folders = append((*folders)[:pos], append([]FolderNode{f}, (*folders)[pos:]...)...)
-	for i := range *folders {
-		(*folders)[i].Position = i
-	}
 }
 
 func findFolderNode(c *Collection, id string) *FolderNode {
