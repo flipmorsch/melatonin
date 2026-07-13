@@ -64,6 +64,21 @@ The output of `console.log`/`console.warn`/`console.error` calls from the last s
 ### Resolved URL
 The URL after `{{variable}}` substitution against the active Environment. Distinct from the URL as stored on the Request (which may contain placeholders). Used in the history detail view to show what was actually sent.
 
+### Request Tab
+An open, independent editing session for a Request — or an unsaved scratch workspace — shown in the Tab Strip. Each tab owns its full editor state (fields, accordion expansion, cursor position, response) independently. Switching tabs preserves the departing tab's state; closing a tab without saving prompts with save/discard/cancel. Tabs are ordered left-to-right in the Tab Strip as the user opens them; the **Active Tab** is the one whose editor and response are currently visible. A request may be open in at most one tab at a time — opening it again focuses the existing tab.
+
+### Tab Strip
+The horizontal bar immediately below the top bar that displays all open Request Tabs plus a **New Tab** button. Scrolls horizontally when tabs overflow the viewport. Each tab shows the request method (color-coded), a truncated name, and a close button. The **Scratch Tab** is the always-present leftmost tab — unclosable, unsaved, the fallback when no other tabs are open.
+
+### Active Tab
+The Request Tab whose editor and response are rendered in the main area. Switching the active tab replaces the visible editor content with the new tab's state. Background tabs retain their state and can receive send results asynchronously.
+
+### Scratch Tab
+A non-closable Request Tab that holds an unnamed, unsaved request. Always present as the leftmost tab. Behaves identically to the current scratch editor: type a URL, send, inspect the response — no save required. There is at most one Scratch Tab at any time.
+
+### Orphaned Tab
+A Request Tab whose underlying saved request was deleted from its Collection while the tab was open. The tab remains open with its in-memory state intact so edits are not lost. Marked visually to indicate the backing request is gone; the user can re-save to a Collection or discard.
+
 ### History Entry
 One recorded send from the Request Client: the request as typed plus its outcome (response or failure). Includes `hadPreScript`/`hadPostScript` booleans and any script error messages so the user can tell whether a script ran and whether it failed. History is client-side — not to be confused with the Request Log, which is what a Mock Server *received*.
 
