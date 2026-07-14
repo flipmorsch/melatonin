@@ -226,17 +226,17 @@ export function RequestView({tab, dispatch, variables, onSave, onSent, justLoade
             {/* Split layout: composer left, response right (accepted live variant) */}
             <Group gap="md" align="stretch" wrap="nowrap" style={{flex: 1, minHeight: 0}}>
             <Box style={{flex: '0 0 50%', minWidth: 0, display: 'flex', flexDirection: 'column'}}>
-            <Tabs defaultValue="request" style={{flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column'}}
+            <Tabs className="request-tabs" defaultValue="request" style={{flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column'}}
                 styles={{
+                    list: {
+                        borderBottom: '1px solid var(--mantine-color-dark-4)',
+                        color: 'var(--mantine-color-dark-2)',
+                    },
                     tab: {
                         fontWeight: 600,
                         fontSize: 'var(--mantine-font-size-sm)',
                         padding: '8px 16px',
                         transition: 'color 130ms ease, border-color 130ms ease',
-                        '&[data-active]': {
-                            color: 'var(--mantine-color-violet-2)',
-                            borderColor: 'var(--mantine-color-violet-4)',
-                        },
                     },
                 }}>
                 <Tabs.List>

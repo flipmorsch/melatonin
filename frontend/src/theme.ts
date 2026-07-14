@@ -38,5 +38,5 @@ export const theme = createTheme({
     headings: {fontFamily: "'Nunito', system-ui, sans-serif", fontWeight: '700'},
     defaultRadius: 'sm',
     radius: {xs: '4px', sm: '6px', md: '8px', lg: '10px', xl: '14px'},
-    fontSizes: {xs: '11px', sm: '12.5px', md: '13.5px', lg: '15px', xl: '18px'},
+    fontSizes: {xs: '12px', sm: '13.5px', md: '15px', lg: '17px', xl: '20px'},
 });

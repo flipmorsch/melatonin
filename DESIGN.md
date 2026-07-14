@@ -42,7 +42,7 @@ DELETE `#f0717e` · HEAD/OPTIONS `#a09dbb`.
 - UI: **Nunito** variable 400–700 (bundled woff2) — its soft roundness *is* the brand voice.
 - Data (URLs, headers, bodies, badges, logs): theme `fontFamilyMonospace`;
   apply with `ff="monospace"` or the `.mono-input` class on inputs.
-- Scale: theme `fontSizes` — xs 11 / sm 12.5 / md 13.5. No display sizes; this is a tool.
+- Scale: theme `fontSizes` — xs 12 / sm 13.5 / md 15 / lg 17 / xl 20. No display sizes; this is a tool.
 
 ## Structure
 

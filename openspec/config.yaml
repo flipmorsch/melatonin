@@ -1,0 +1,227 @@
+schema: spec-driven
+
+context: |
+  # melatonin — local-first API workbench
+
+  melatonin is a desktop app combining a Request Client (Insomnia-like HTTP composer)
+  and a Mock Server (user-defined HTTP server for faking APIs). Local-first: no accounts,
+  no cloud sync, no subscriptions. Everything lives on the user's machine.
+
+  ## Tech Stack
+
+  - Backend: Go, Wails v2 desktop framework (binds Go backend to React frontend)
+  - Frontend: React 18, TypeScript, Mantine v7 (`@mantine/core`)
+  - Storage: Plain JSON files in `~/.config/melatonin/` (one per Collection, one for
+    Environments, one per Mock Server). Secrets stored in plaintext (personal machine);
+    data dir created with `0700` permissions.
+  - Script runtime: Goja (Go JavaScript engine, no browser APIs)
+  - Linux-first, single binary (`melatonin`)
+  - Makefile: `make run` (dev), `make install` (→ `~/.local/bin`)
+
+  ## Architecture
+
+  - Wails binds Go backend to React frontend via runtime function calls
+  - Frontend feature-folder structure: `features/sidebar/`, `features/request/`,
+    `features/environments/`, `features/history/`, `features/mocks/`
+  - Shared primitives in `components/` (Brand, MethodBadge, RunDot, EmptyState,
+    SectionLabel, ConfirmDelete, KVEditor, CodeEditor)
+  - Data access hooks in `hooks/` (useCollections, useEnvironments, useMocks)
+  - Pure helpers in `lib/` (kv parsing, grouping, pretty-print)
+  - Tab state managed via `useReducer` at App level (ordered array, ADR 0006)
+  - No external state library (rejected Zustand/Redux)
+  - Frontend build output in `build/`
+  - Backend Go files at root: app.go, main.go, script.go, storage.go, mock.go,
+    history.go + corresponding _test.go files
+
+  ## Domain Glossary
+
+  ### melatonin
+  The product itself: what you take to fix Insomnia. A desktop app combining the
+  Request Client and the Mock Server.
+
+  ### Request Client
+  The Insomnia-like half: compose HTTP request (method, URL, headers, body), send,
+  inspect response.
+
+  ### Mock Server
+  User-defined HTTP server answering requests with configured Routes. Three states:
+  **defined** (persisted on disk, not listening), **running** (listening, matching
+  routes, logging), **stopped** (not listening, auto-start intent persisted).
+  Binds to `127.0.0.1` by default; per-server "expose on network" toggle → `0.0.0.0`.
+  Multiple may run simultaneously on different ports.
+
+  ### Request
+  Saved, named HTTP request definition: method, URL, query params (ordered list),
+  headers (ordered list), body, auth, Send Options, optional pre-request and/or
+  post-response script. Lives inside a Collection — root or nested in Folder.
+  Same param/header name may appear multiple times (HTTP allows duplicates).
+
+  ### Auth Helper
+  Structured shortcut on Request for common auth schemes (bearer token, basic
+  credentials). Not a header: at send time produces `Authorization` header,
+  overriding any manual one.
+
+  ### Cookie Jar
+  In-memory store collecting `Set-Cookie` from responses, attaching `Cookie` to
+  subsequent same-domain requests. Session-duration, not persisted, no UI.
+  Silent — affects send behavior, invisible to user.
+
+  ### Collection
+  Named container with ordered tree of Folders and Requests. Shown in sidebar.
+
+  ### Folder
+  Named grouping within a Collection. May contain Requests and child Folders.
+  Order user-controlled and persisted. Delete cascades (with confirmation count).
+
+  ### Position
+  Zero-based ordinal location of Request/Folder within parent's ordered list.
+  Created at last position; reordering shifts siblings. Move to different parent
+  not yet supported.
+
+  ### Send Options
+  Per-Request overrides: timeout, follow redirects, TLS verify. Unset = defaults
+  (30s timeout, follow redirects, verify TLS).
+
+  ### Environment
+  Named set of variables (e.g. dev/staging/prod). Global, not scoped to Collection.
+  At most one active at a time; zero = variables left unresolved. Requests reference
+  variables as `{{name}}`.
+
+  ### Route
+  Rule inside Mock Server: method + path → static response (status, headers, body).
+  Path matching is exact (plus possible trailing wildcard). Unmatched requests get
+  404 with "no route matched" body.
+
+  ### Pre-request Script
+  JavaScript snippet attached to Request, runs before HTTP call in Goja runtime.
+  Receives mutable `request` object (with `{{variable}}` templates still unresolved).
+  Can set headers, rewrite body, change method. Variable substitution happens AFTER
+  script. If script throws, send aborted, error shown in UI.
+
+  ### Post-response Script
+  JavaScript snippet attached to Request, runs after HTTP call in Goja runtime.
+  Receives `request` (snapshot) and mutable `response` (status, headers, body).
+  Can mutate displayed response, call `env.set(name, value)`. If throws, response
+  still shown but error appears in script log.
+
+  ### Script API
+  Globals available to pre-request and post-response scripts:
+  - `request` — mutable mirror of RequestInput (method, url, params, headers, body,
+    auth, options). Pre-request: mutate to change what gets sent. Post-response:
+    read-only snapshot.
+  - `response` — post-response only. Mutable: `status`, `statusText`, `headers`
+    (map of `string → string[]`), `body` (string). Pre-request: `undefined`.
+  - `env.get(name)` — reads variable from active Environment. Returns `undefined`
+    for unknown names.
+  - `env.set(name, value)` — writes to ephemeral session variable store (in-memory,
+    survives across sends, never persisted).
+  - `console.log(...)` / `console.warn(...)` / `console.error(...)` — writes to
+    script log shown below editor.
+  - `fetch(url, options?)` — async HTTP via Go `net/http` wrapper. Returns Promise
+    resolving to `{ status, statusText, headers, text(), json() }`. Shares request
+    timeout budget.
+
+  ### Session Variable
+  Variable set at runtime by script via `env.set()`. In-memory, session-duration,
+  visible to `{{name}}` substitution. Never persisted. Separate from Environment
+  variables. Session takes precedence on name collision.
+
+  ### Script Log
+  Output of console calls from last script run, displayed inline below script editor.
+  Pre-request and post-response each have their own log.
+
+  ### Resolved URL
+  URL after `{{variable}}` substitution against active Environment. Distinct from
+  stored URL (may contain placeholders). Used in history detail view.
+
+  ### Request Tab
+  Open, independent editing session for a Request or unsaved scratch workspace.
+  Each tab owns full editor state (fields, accordion expansion, cursor, response).
+  Switching preserves departing tab's state. Close unsaved prompts save/discard/cancel.
+  A request may be open in at most one tab; re-opening focuses existing tab.
+
+  ### Tab Strip
+  Horizontal bar below top bar displaying all open Request Tabs + New Tab button.
+  Scrolls horizontally on overflow. Each tab shows color-coded method, truncated name,
+  close button.
+
+  ### Active Tab
+  The Request Tab whose editor and response are currently visible. Switching replaces
+  visible content. Background tabs retain state and can receive async send results.
+
+  ### Scratch Tab
+  Non-closable, always-present leftmost tab holding unnamed, unsaved request.
+  At most one exists. Fallback when no other tabs open.
+
+  ### Orphaned Tab
+  Request Tab whose underlying saved request was deleted from Collection while open.
+  Remains open with in-memory state intact (edits not lost). Visually marked;
+  user can re-save or discard.
+
+  ### History Entry
+  One recorded send from Request Client: request as typed + outcome (response or
+  failure). Includes `hadPreScript`/`hadPostScript` booleans and script errors.
+  Client-side — distinct from Request Log (mock-side).
+
+  ### Request Log
+  List of incoming requests a running Mock Server received. Mock-side.
+
+  ### Matched Request
+  Request Log entry that matched a Route. Mock responded with route's configured
+  status, headers, body.
+
+  ### Unmatched Request
+  Request Log entry matching no Route. Mock responded with 404 and "no route
+  matched" body.
+
+  ## Design System
+
+  - **Dark-only** — no light theme planned. Violet-cast ink surfaces (never neutral
+    gray-black). See DESIGN.md for full system.
+  - **Typography**: Nunito variable 400–700 (bundled woff2) for UI; monospace for
+    data (URLs, headers, bodies, logs). Scale: xs 12, sm 13.5, md 15, lg 17, xl 20.
+  - **Colors**: `dark.7` (#0c0e16) app bg, `dark.6` (#12141f) recessed,
+    `dark.5` (#191c2a) raised/hover, `dark.4` (#262a3b) borders. Text primary
+    `dark.0` (#eceaf4), secondary `dark.1` (#a09dbb), quiet `dark.2` (#8b88a3).
+    `dark.3` (#625f7d) decoration only — fails 4.5:1, never body/label text.
+    Primary: `violet.4` (#8266f0). Success: `teal.4`. Error: `red.4`.
+  - **Method hues** (information, not decoration): GET #5bd6a2, POST #64aef2,
+    PUT #eec468, PATCH #f0995f, DELETE #f0717e, HEAD/OPTIONS #a09dbb.
+  - **One signature**: dusk horizon — 1px gradient (indigo → violet → amber) under
+    top bar. No other gradients or glows, except run-state night-light pulse on
+    running mock dot.
+  - **Motion**: 130ms ease on hover/focus. `prefers-reduced-motion` disables pulse.
+  - **Accessibility**: `:focus-visible` rings on all interactive elements. Text
+    ≥ 4.5:1. Method hues never sole signal — name always printed. Destructive actions
+    use ConfirmDelete (two-click, 3s disarm) — never modals.
+  - **Component approach**: Mantine component first, custom CSS second. Sources of
+    truth: `frontend/src/theme.ts` (tokens), `frontend/src/app.css` (brand signatures).
+
+  ## Key ADRs
+
+  - 0001: Custom design tokens over CSS framework
+  - 0002: Mantine as component base (rejected Material Design, raw CSS)
+  - 0003: Ordered KV lists for params and headers (not maps — HTTP allows duplicates)
+  - 0004: CodeMirror for code editing (not Monaco)
+  - 0005: Position field for tree ordering (zero-based, shift-on-reorder)
+  - 0006: useReducer for tab state (rejected Zustand, Redux, Mantine Tabs)
+
+  ## Principles
+
+  - Local-first: no accounts, no cloud sync, no subscriptions
+  - Data is the interface — chrome stays quiet, monospace carries information
+  - State must be glanceable — color-coded method, run state, environment, response
+  - Never block compose→send→inspect loop (dialogs only for destructive two-click)
+  - Empty states direct (say what to do next, not what's missing)
+  - One signature (dusk horizon), quiet everywhere else
+
+rules:
+  proposal:
+    - "Check CONTEXT.md for existing terminology before introducing new terms. If a term conflicts with the glossary, flag the mismatch and align with the canonical definition."
+    - "Reference ROADMAP.md to ensure proposed scope aligns with current priorities. If a feature is explicitly deferred in ROADMAP.md, acknowledge this and justify why it's being revisited."
+  design:
+    - "Check docs/adr/ for existing architectural decisions before proposing new ones. Reference the ADR number if a decision is already settled."
+    - "Reference DESIGN.md for UI constraints: dark-only, Nunito font, Mantine-first, dusk horizon signature, violet-cast colors, method hues, 130ms motion, accessibility requirements."
+  specs:
+    - "Use terminology from CONTEXT.md consistently. If a new domain term is needed, note it — do not silently introduce synonyms."
+    - "Each requirement SHALL have at least one scenario using WHEN/THEN format."

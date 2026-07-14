@@ -69,15 +69,15 @@
 
 .method {
     font-family: var(--mantine-font-family-monospace);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.03em;
     padding: 2px 0;
     border-radius: 4px;
     flex-shrink: 0;
     display: inline-flex;
     justify-content: center;
-    width: 52px;
+    width: 58px;
     color: var(--m-neutral);
     background: color-mix(in srgb, var(--m-neutral) 12%, transparent);
 }
@@ -92,7 +92,7 @@
 
 .dot {
     color: var(--mantine-color-dark-3);
-    font-size: 9px;
+    font-size: 10px;
     flex-shrink: 0;
     transition: color 130ms ease;
 }
@@ -228,6 +228,22 @@
 .mono-input input, .mono-input textarea, textarea.mono-input {
     font-family: var(--mantine-font-family-monospace);
     font-size: var(--mantine-font-size-sm);
+}
+
+/* ---------- request tab bar ---------- */
+
+.request-tabs .mantine-Tabs-tab:where([data-active]) {
+    color: var(--mantine-color-violet-2);
+}
+
+.request-tabs .mantine-Tabs-tab:where(:not([data-active])):hover {
+    color: var(--mantine-color-dark-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .request-tabs .mantine-Tabs-tab {
+        transition: none;
+    }
 }
 
 /* restore visible focus on UnstyledButton for keyboard navigation */

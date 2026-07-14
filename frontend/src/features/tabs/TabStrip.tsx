@@ -64,7 +64,7 @@ export function TabStrip({tabs, activeIdx, onSelect, onClose, onNewScratch}: Pro
                                         <Text
                                             span
                                             ff="monospace"
-                                            fz={10}
+                                            fz={11}
                                             fw={700}
                                             c={methodColor(tab.method)}
                                             style={{lineHeight: 1}}
@@ -74,7 +74,7 @@ export function TabStrip({tabs, activeIdx, onSelect, onClose, onNewScratch}: Pro
                                     )}
                                     <Text
                                         span
-                                        size="xs"
+                                        size="sm"
                                         fw={active ? 600 : 400}
                                         c={active ? 'dark.0' : 'dark.2'}
                                         truncate
