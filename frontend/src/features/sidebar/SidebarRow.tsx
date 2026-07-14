@@ -1,4 +1,4 @@
-import {ReactNode, useCallback} from 'react';
+import {ReactNode, useCallback, useEffect, useState} from 'react';
 import {Box, Text} from '@mantine/core';
 
 export interface ContextAction {
@@ -44,15 +44,29 @@ export function SidebarRow({label, rowId, left, leading, right, selected, depth,
     const d = depth ?? 0;
     const hasDepth = d > 0;
 
+    // Delete is two-press so a stray keystroke can't destroy a request: the
+    // first Delete arms (visible red cue), a second within 3s fires, Esc cancels.
+    const [armed, setArmed] = useState(false);
+    useEffect(() => {
+        if (!armed) return;
+        const t = setTimeout(() => setArmed(false), 3000);
+        return () => clearTimeout(t);
+    }, [armed]);
+
     const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+        if (e.key === 'Escape' && armed) {
             e.preventDefault();
+            setArmed(false);
+        } else if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (armed) setArmed(false);
             onClick();
         } else if (e.key === 'Delete' && onDelete) {
             e.preventDefault();
-            onDelete();
+            if (armed) { setArmed(false); onDelete(); }
+            else setArmed(true);
         }
-    }, [onClick, onDelete]);
+    }, [onClick, onDelete, armed]);
 
     const handleContextMenu = useCallback((e: React.MouseEvent) => {
         if (!contextActions || contextActions.length === 0) return;
@@ -69,6 +83,7 @@ export function SidebarRow({label, rowId, left, leading, right, selected, depth,
             onClick={onClick}
             onKeyDown={handleKeyDown}
             onContextMenu={handleContextMenu}
+            onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setArmed(false); }}
             className="side-row"
             w={hasDepth ? `calc(100% - ${d * 16}px)` : '100%'}
             ml={d * 16}
@@ -87,6 +102,9 @@ export function SidebarRow({label, rowId, left, leading, right, selected, depth,
                 } : {
                     color: 'var(--mantine-color-dark-1)',
                 }),
+                ...(armed ? {
+                    background: 'color-mix(in srgb, var(--mantine-color-red-4) 16%, transparent)',
+                } : {}),
             }}
         >
             {/* Leading slot: chevron, toggle — outside the click target's flow */}
@@ -105,8 +123,15 @@ export function SidebarRow({label, rowId, left, leading, right, selected, depth,
                 </Text>
             </Box>
 
-            {/* Right slot: action buttons, status — stop propagation */}
-            {right && (
+            {/* Right slot: armed-delete hint, else action buttons — stop propagation */}
+            {armed ? (
+                <Box style={{flexShrink: 0}}>
+                    <Text role="status" size="xs" fw={600} c="red.4" style={{userSelect: 'none'}}
+                        aria-label="Press Delete again to confirm, or Escape to cancel">
+                        Delete? ⌦
+                    </Text>
+                </Box>
+            ) : right && (
                 <Box
                     style={{flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4}}
                     onClick={e => e.stopPropagation()}

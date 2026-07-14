@@ -315,14 +315,5 @@ export function useTabs() {
         [],
     );
 
-    /** Returns true if the tab at idx has unsaved changes. */
-    const isDirty = useCallback(
-        (idx: number) => {
-            const tab = state.tabs[idx];
-            return tab && tab.type === 'saved' && tab.saveState !== 'saved';
-        },
-        [state.tabs],
-    );
-
-    return {state, active, dispatch, pendingRef, justLoadedRef, flushPending, isDirty};
+    return {state, active, dispatch, pendingRef, justLoadedRef, flushPending};
 }

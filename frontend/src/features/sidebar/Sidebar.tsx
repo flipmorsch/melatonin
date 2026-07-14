@@ -197,7 +197,9 @@ export const Sidebar = memo(function Sidebar(p: Props) {
             </Box>
 
             <ScrollArea h="100%" px="xs" type="never" className="side-scroll" style={{flex: 1}}>
-                <div ref={sidebarRef} tabIndex={-1} data-sidebar-container style={{outline: 'none'}}>
+                <div ref={sidebarRef} tabIndex={0} data-sidebar-container
+                    role="group" aria-label="Sidebar — arrow keys navigate, Enter opens"
+                    style={{outline: 'none'}}>
                     <div className="side-sec">
                         <CollectionsSection
                             collections={p.collections}

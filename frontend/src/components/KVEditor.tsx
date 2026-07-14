@@ -1,4 +1,5 @@
 import {ActionIcon, Group, Stack, Text, TextInput} from '@mantine/core';
+import {IconX} from '@tabler/icons-react';
 
 /** One editable key/value row; id is a client-side React key only. */
 export interface KVRow {
@@ -56,7 +57,7 @@ export function KVEditor({rows, onChange, keyPlaceholder, valuePlaceholder, dead
                             placeholder={valuePlaceholder}
                         />
                         <ActionIcon size="sm" variant="subtle" color="gray" title="Remove row"
-                            onClick={() => onChange(rows.filter(r => r.id !== row.id))}>✕</ActionIcon>
+                            onClick={() => onChange(rows.filter(r => r.id !== row.id))}><IconX size={14}/></ActionIcon>
                     </Group>
                 );
             })}

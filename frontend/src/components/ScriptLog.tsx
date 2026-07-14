@@ -10,7 +10,7 @@ export function ScriptLog({text}: Props) {
         <Box
             py={8} px="sm"
             style={{
-                background: '#0a0c12',
+                background: 'var(--mantine-color-dark-8)',
                 borderRadius: 'var(--mantine-radius-sm)',
                 border: '1px solid var(--mantine-color-dark-4)',
                 maxHeight: 200,

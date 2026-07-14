@@ -2,10 +2,12 @@
 
 **Direction: nocturnal.** melatonin is the hormone of darkness — the app puts
 Insomnia to sleep. Every visual choice derives from that: violet-cast ink
-surfaces (night sky, never neutral gray-black), moonlight text, soft rounded
-geometry (Nunito's roundedness carried into radii — deliberately *not* the
-sharp neutral dev-tool look), and one signature element: the **dusk horizon**,
-a 1px gradient (indigo → violet → amber) under the top bar.
+surfaces (night sky, never neutral gray-black), moonlight text, crisp control
+geometry (a tight 3px default radius suits the dense tool chrome; the softer
+8px `lg` radius is reserved for Papers such as the response pane — the
+roundness lives in Nunito's letterforms, not in the control corners), and one
+signature element: the **dusk horizon**, a 1px gradient (indigo → violet →
+amber) under the top bar.
 
 Dark-only by design. A light theme is not planned; it would be a different brand.
 

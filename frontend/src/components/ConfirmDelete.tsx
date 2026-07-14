@@ -4,7 +4,7 @@ import {IconTrash} from '@tabler/icons-react';
 
 interface Props {
     onConfirm: () => void;
-    /** 'icon' renders a small ✕ that arms into "sure?"; 'button' renders a labelled Delete button. */
+    /** 'icon' renders a small trash button that arms into "sure?"; 'button' renders a labelled Delete button. */
     variant?: 'icon' | 'button';
     title?: string;
 }

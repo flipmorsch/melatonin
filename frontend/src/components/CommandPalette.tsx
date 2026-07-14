@@ -62,7 +62,7 @@ export function CommandPalette({open, onClose, items}: Props) {
         <Modal
             opened={open}
             onClose={onClose}
-            title="Jump to…"
+            title="Search or run a command"
             size="lg"
             padding={0}
             withCloseButton={false}
@@ -74,10 +74,15 @@ export function CommandPalette({open, onClose, items}: Props) {
         >
             <TextInput
                 ref={inputRef}
-                placeholder="Search requests, mocks, history…"
+                placeholder="Search requests & mocks, or run a command…"
                 value={query}
                 onChange={e => { setQuery(e.target.value); setIndex(0); }}
                 onKeyDown={onKey}
+                role="combobox"
+                aria-expanded={filtered.length > 0}
+                aria-controls="cmd-palette-list"
+                aria-activedescendant={filtered[safeIndex] ? `cmd-opt-${safeIndex}` : undefined}
+                aria-label="Search or run a command"
                 styles={{input: {border: 'none', borderRadius: 0, fontSize: 'var(--mantine-font-size-md)'}}}
                 px="md"
                 pb="xs"
@@ -86,9 +91,13 @@ export function CommandPalette({open, onClose, items}: Props) {
                 <Text size="sm" c="dark.2" px="md" py="md">No matches</Text>
             )}
             <ScrollArea h={320} type="auto">
+                <div role="listbox" id="cmd-palette-list" aria-label="Results">
                 {filtered.map((item, i) => (
                     <UnstyledButton
                         key={item.id}
+                        id={`cmd-opt-${i}`}
+                        role="option"
+                        aria-selected={i === safeIndex}
                         onClick={() => { item.onSelect(); onClose(); }}
                         px="md"
                         py={8}
@@ -107,6 +116,7 @@ export function CommandPalette({open, onClose, items}: Props) {
                         </Group>
                     </UnstyledButton>
                 ))}
+                </div>
             </ScrollArea>
         </Modal>
     );

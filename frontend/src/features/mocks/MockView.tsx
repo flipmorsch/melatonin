@@ -1,5 +1,6 @@
 import {useEffect, useRef, useState} from 'react';
 import {ActionIcon, Badge, Button, Group, ScrollArea, Stack, Switch, Text, TextInput} from '@mantine/core';
+import {IconCopy} from '@tabler/icons-react';
 import {ClipboardSetText} from '../../../wailsjs/runtime/runtime';
 import {main} from '../../../wailsjs/go/models';
 import {kvToText, parseKV} from '../../lib/kv';
@@ -20,6 +21,8 @@ interface Props {
     onStart: (id: string) => Promise<void>;
     onStop: (id: string) => Promise<void>;
     onClearLog: (id: string) => void;
+    /** Writes this URL into the active env's {{baseUrl}}; returns a status line. */
+    onUseAsBaseUrl: (baseUrl: string) => string;
 }
 
 function toDraft(r: main.MockRoute): RouteDraft {
@@ -44,12 +47,20 @@ function fromDraft(d: RouteDraft): main.MockRoute {
     };
 }
 
-export function MockView({mock, selectedRouteId, runningPort, log, onSave, onStart, onStop, onClearLog}: Props) {
+export function MockView({mock, selectedRouteId, runningPort, log, onSave, onStart, onStop, onClearLog, onUseAsBaseUrl}: Props) {
     const [name, setName] = useState('');
     const [port, setPort] = useState('9000');
     const [expose, setExpose] = useState(false);
     const [route, setRoute] = useState<RouteDraft | null>(null);
     const [error, setError] = useState('');
+    const [handoff, setHandoff] = useState('');
+
+    // The {{baseUrl}} handoff confirmation clears itself after a few seconds.
+    useEffect(() => {
+        if (!handoff) return;
+        const t = setTimeout(() => setHandoff(''), 4000);
+        return () => clearTimeout(t);
+    }, [handoff]);
 
     /** Debounced auto-save not yet written to disk. */
     const pending = useRef<{timer: number, def: main.MockServer} | null>(null);
@@ -170,11 +181,17 @@ export function MockView({mock, selectedRouteId, runningPort, log, onSave, onSta
                 </Button>
             </Group>
             {running &&
-                <Group gap={4}>
+                <Group gap={8}>
                     <Text size="xs" ff="monospace" c="teal.4">{baseUrl}</Text>
                     <ActionIcon size="sm" variant="subtle" color="gray"
-                        title="Copy base URL (paste it into an environment variable)"
-                        onClick={() => ClipboardSetText(baseUrl)}>⧉</ActionIcon>
+                        title="Copy base URL"
+                        onClick={() => ClipboardSetText(baseUrl)}><IconCopy size={15}/></ActionIcon>
+                    <Button size="compact-xs" variant="subtle"
+                        title="Set {{baseUrl}} in the active environment to this URL"
+                        onClick={() => setHandoff(onUseAsBaseUrl(baseUrl))}>
+                        Use as {'{{baseUrl}}'}
+                    </Button>
+                    {handoff && <Text size="xs" c="teal.4" aria-live="polite">{handoff}</Text>}
                 </Group>}
             {error && <Text size="sm" ff="monospace" c="red.4">{error}</Text>}
 

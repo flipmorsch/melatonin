@@ -69,6 +69,7 @@ export function MocksSection(p: Props) {
                             leading={
                                 <UnstyledButton
                                     py={4}
+                                    aria-expanded={open}
                                     aria-label={open ? 'Collapse routes' : 'Expand routes'}
                                     onClick={() => toggle(m.id)}
                                     style={{display: 'flex', alignItems: 'center'}}>
@@ -106,7 +107,7 @@ export function MocksSection(p: Props) {
                             />)}
                         {/* hint indent 26 = route row indent (16) + row px (10): the route glyph rail */}
                         {open && (m.routes ?? []).length === 0 &&
-                            <Text size="xs" c="dark.2" pl={26} py={2}>No routes</Text>}
+                            <Text size="xs" c="dark.2" pl={26} py={2}>No routes — use + to add one</Text>}
                     </Box>
                 );
             })}

@@ -6,17 +6,28 @@ import {
     autocompletion, closeBrackets, closeBracketsKeymap, CompletionContext, completionKeymap,
 } from '@codemirror/autocomplete';
 import {json, jsonParseLinter} from '@codemirror/lang-json';
+import {javascript} from '@codemirror/lang-javascript';
 import {linter} from '@codemirror/lint';
 import {foldGutter, HighlightStyle, syntaxHighlighting} from '@codemirror/language';
 import {tags as t} from '@lezer/highlight';
 
-// JSON tokens in the night palette (DESIGN.md): violet keys, method-hue accents.
+// Shared tokens for JSON and JS in the night palette (DESIGN.md).
+// JS-specific tags (keyword, comment, etc.) are never emitted by the JSON parser.
 const nightHighlight = HighlightStyle.define([
+    // Shared: JSON keys, JS property access
     {tag: t.propertyName, color: 'var(--mantine-color-violet-2)'},
     {tag: t.string, color: 'var(--m-get)'},
     {tag: t.number, color: 'var(--m-put)'},
     {tag: [t.bool, t.null], color: 'var(--m-patch)'},
-    {tag: [t.punctuation, t.separator, t.bracket], color: 'var(--mantine-color-dark-1)'},
+    {tag: [t.punctuation, t.separator, t.bracket, t.operator], color: 'var(--mantine-color-dark-1)'},
+    // JavaScript-only tokens
+    {tag: [t.keyword, t.controlKeyword, t.operatorKeyword, t.moduleKeyword, t.self], color: 'var(--mantine-color-violet-2)'},
+    {tag: t.comment, color: 'var(--mantine-color-dark-2)', fontStyle: 'italic'},
+    {tag: t.function(t.variableName), color: 'var(--m-post)'},
+    {tag: t.regexp, color: 'var(--m-delete)'},
+    {tag: t.escape, color: 'var(--m-patch)'},
+    {tag: t.typeName, color: 'var(--m-post)'},
+    {tag: t.special(t.string), color: 'var(--m-get)'},
 ]);
 
 const chrome = (variant: 'input' | 'fill', minHeight: number) => EditorView.theme({
@@ -47,8 +58,9 @@ const chrome = (variant: 'input' | 'fill', minHeight: number) => EditorView.them
     '.cm-line': {padding: '0 10px'},
     '.cm-cursor': {borderLeftColor: 'var(--mantine-color-dark-0)'},
     '.cm-activeLine, .cm-activeLineGutter': {backgroundColor: 'transparent'},
-    '.cm-gutters': {backgroundColor: 'transparent', border: 'none', color: 'var(--mantine-color-dark-3)'},
-    '.cm-placeholder': {color: 'var(--mantine-color-dark-3)'},
+    // dark.2 (not dark.3): gutter marks and placeholder text must clear ≥4.5:1 (DESIGN.md).
+    '.cm-gutters': {backgroundColor: 'transparent', border: 'none', color: 'var(--mantine-color-dark-2)'},
+    '.cm-placeholder': {color: 'var(--mantine-color-dark-2)'},
     '.cm-tooltip': {
         backgroundColor: 'var(--mantine-color-dark-5)',
         border: '1px solid var(--mantine-color-dark-4)',
@@ -98,6 +110,8 @@ interface Props {
     variant?: 'input' | 'fill';
     /** JSON mode: syntax colors, and (when editable) the parse-error underline. */
     json?: boolean;
+    /** JavaScript mode: syntax colors, bracket matching, auto-indent, keyword completion. */
+    javascript?: boolean;
     /** Environment variable names offered after typing {{. */
     variables?: string[];
     /** Enable script API autocomplete (request, response, env, console, …). */
@@ -112,11 +126,12 @@ interface Props {
 // the view is created once and only the doc and JSON mode are reconfigured.
 export function CodeEditor({
     value, onChange, placeholder, readOnly, variant = 'input',
-    json: jsonMode, variables, scriptApi, fold, minHeight = 90, style,
+    json: jsonMode, javascript: jsMode, variables, scriptApi, fold, minHeight = 90, style,
 }: Props) {
     const hostRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
     const jsonConf = useRef(new Compartment());
+    const jsConf = useRef(new Compartment());
 
     const onChangeRef = useRef(onChange);
     onChangeRef.current = onChange;
@@ -166,6 +181,7 @@ export function CodeEditor({
                     syntaxHighlighting(nightHighlight),
                     EditorView.lineWrapping,
                     jsonConf.current.of([]),
+                    jsConf.current.of([]),
                     fold ? foldGutter() : [],
                     placeholder ? cmPlaceholder(placeholder) : [],
                     readOnly
@@ -208,6 +224,13 @@ export function CodeEditor({
         )});
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [jsonMode]);
+
+    useEffect(() => {
+        viewRef.current?.dispatch({effects: jsConf.current.reconfigure(
+            jsMode ? javascript() : [],
+        )});
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [jsMode]);
 
     return <div ref={hostRef} style={style}/>;
 }

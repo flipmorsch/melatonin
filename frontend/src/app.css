@@ -29,6 +29,12 @@
 
     /* sidebar spacing scale — 1 = Mantine default, tuned airier */
     --side-density: 1.1;
+
+    /* violet-4 filled under a white label = 4.11:1 (fails 4.5:1). Darken the
+       *filled* shade to violet-5 (≈4.9:1); violet-4 stays the accent /
+       selection / focus tier, and teal/red filled buttons are untouched. */
+    --mantine-color-violet-filled: var(--mantine-color-violet-5);
+    --mantine-color-violet-filled-hover: var(--mantine-color-violet-6);
 }
 
 ::selection { background: var(--selection-bg); }
@@ -250,6 +256,40 @@
 .p-btn:focus-visible {
     outline: 2px solid var(--mantine-color-violet-4);
     outline-offset: 2px;
+}
+
+/* Keyboard focus ring for request tabs (roving tabindex) */
+.tab-strip-tab:focus-visible {
+    outline: 2px solid var(--mantine-color-violet-4);
+    outline-offset: -2px;
+    border-radius: var(--mantine-radius-xs);
+}
+
+/* Focus ring on text inputs / selects — the ring the design promises everywhere,
+   not just buttons/rows/tabs. Sits just outside the field border. */
+.p-inp:focus-visible,
+.p-sel:focus-visible,
+.p-area:focus-visible,
+.p-num:focus-visible,
+.p-pwd-inner:focus-visible {
+    outline: 2px solid var(--mantine-color-violet-4);
+    outline-offset: 1px;
+}
+
+/* Response "Headers" disclosure: custom chevron matching the sidebar, no native ▶ */
+.resp-headers > summary { list-style: none; }
+.resp-headers > summary::-webkit-details-marker { display: none; }
+.resp-headers > summary::before {
+    content: '\203A'; /* › */
+    display: inline-block;
+    margin-right: 6px;
+    color: var(--mantine-color-dark-3);
+    transition: transform 150ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+.resp-headers[open] > summary::before { transform: rotate(90deg); }
+
+@media (prefers-reduced-motion: reduce) {
+    .resp-headers > summary::before { transition: none; }
 }
 
 /* ---------- drag-and-drop ---------- */
