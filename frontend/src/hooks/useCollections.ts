@@ -13,8 +13,9 @@ export function useCollections() {
     useEffect(() => { refresh().catch(console.error); }, [refresh]);
 
     const create = async (name: string) => {
-        await CreateCollection(name);
+        const created = await CreateCollection(name);
         await refresh();
+        return created;
     };
 
     const remove = async (id: string) => {

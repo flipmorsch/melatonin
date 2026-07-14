@@ -58,8 +58,9 @@ const chrome = (variant: 'input' | 'fill', minHeight: number) => EditorView.them
     '.cm-line': {padding: '0 10px'},
     '.cm-cursor': {borderLeftColor: 'var(--mantine-color-dark-0)'},
     '.cm-activeLine, .cm-activeLineGutter': {backgroundColor: 'transparent'},
-    '.cm-gutters': {backgroundColor: 'transparent', border: 'none', color: 'var(--mantine-color-dark-3)'},
-    '.cm-placeholder': {color: 'var(--mantine-color-dark-3)'},
+    // dark.2 (not dark.3): gutter marks and placeholder text must clear ≥4.5:1 (DESIGN.md).
+    '.cm-gutters': {backgroundColor: 'transparent', border: 'none', color: 'var(--mantine-color-dark-2)'},
+    '.cm-placeholder': {color: 'var(--mantine-color-dark-2)'},
     '.cm-tooltip': {
         backgroundColor: 'var(--mantine-color-dark-5)',
         border: '1px solid var(--mantine-color-dark-4)',

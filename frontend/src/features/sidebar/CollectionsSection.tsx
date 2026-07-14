@@ -1,6 +1,6 @@
 import {useMemo, useState, ReactNode, useRef} from 'react';
-import {ActionIcon, Box, Group, Stack, Text, TextInput, UnstyledButton} from '@mantine/core';
-import {IconChevronRight, IconDotsVertical, IconFolderPlus, IconGripVertical} from '@tabler/icons-react';
+import {ActionIcon, Box, Button, Group, Stack, Text, TextInput, UnstyledButton} from '@mantine/core';
+import {IconChevronRight, IconDotsVertical, IconFolderPlus, IconGripVertical, IconX} from '@tabler/icons-react';
 import {
     CollisionDetection,
     DndContext,
@@ -25,6 +25,9 @@ import {ContextAction, openSidebarMenu} from './SidebarRow';
 import {SortableSidebarRow} from './SortableSidebarRow';
 import {MethodBadge} from '../../components/MethodBadge';
 
+/** A queued cascade delete awaiting inline confirmation (name + child count). */
+type PendingDelete = {label: string; count: number; onConfirm: () => void};
+
 interface Props {
     collections: main.Collection[];
     selectedReqId: string | null;
@@ -42,7 +45,7 @@ interface Props {
 
 // ── Sortable folder wrapper ──────────────────────────────────────────
 
-function SortableFolderRow({folder, colId, depth, collapsed, onToggle, onAddRequest, onDeleteFolder, onCountFolder, onCreateFolder, newFolder, setNewFolder, folderName, setFolderName, requestRows, subfolderRows}: {
+function SortableFolderRow({folder, colId, depth, collapsed, onToggle, onAddRequest, onDeleteFolder, onCountFolder, onCreateFolder, onCascadeDelete, newFolder, setNewFolder, folderName, setFolderName, requestRows, subfolderRows}: {
     folder: main.FolderNode;
     colId: string;
     depth: number;
@@ -52,6 +55,7 @@ function SortableFolderRow({folder, colId, depth, collapsed, onToggle, onAddRequ
     onDeleteFolder: (colId: string, folderId: string) => Promise<void>;
     onCountFolder: (colId: string, folderId: string) => Promise<number>;
     onCreateFolder: (colId: string, parentFolderId: string, name: string) => Promise<void>;
+    onCascadeDelete: (pending: PendingDelete) => void;
     newFolder: {colId: string, parentId: string} | null;
     setNewFolder: (v: {colId: string, parentId: string} | null) => void;
     folderName: string;
@@ -84,9 +88,12 @@ function SortableFolderRow({folder, colId, depth, collapsed, onToggle, onAddRequ
         {label: 'New subfolder', onClick: () => { setNewFolder({colId, parentId: folder.id}); setFolderName(''); }},
         {label: 'Delete', color: 'red', onClick: async () => {
             const n = await onCountFolder(colId, folder.id);
-            if (n > 0 && !confirm(`Delete folder "${folder.name}" and its ${n} request(s)?`))
-                return;
-            await onDeleteFolder(colId, folder.id);
+            if (n === 0) { await onDeleteFolder(colId, folder.id); return; }
+            onCascadeDelete({
+                label: `folder "${folder.name}"`,
+                count: n,
+                onConfirm: () => { onDeleteFolder(colId, folder.id); },
+            });
         }},
     ];
 
@@ -106,6 +113,7 @@ function SortableFolderRow({folder, colId, depth, collapsed, onToggle, onAddRequ
                     <IconGripVertical size={14} style={{color: 'var(--mantine-color-dark-3)'}}/>
                 </Box>
                 <UnstyledButton onClick={onToggle}
+                    aria-expanded={!isCollapsed} aria-label={folder.name}
                     style={{flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 4}}>
                     <IconChevronRight size={18} className={isCollapsed ? 'chevron' : 'chevron open'} style={{flexShrink: 0}}/>
                     <Text size="xs" c="dark.2" truncate>{folder.name}</Text>
@@ -136,7 +144,7 @@ function SortableFolderRow({folder, colId, depth, collapsed, onToggle, onAddRequ
             {/* hint indent 26 = child row indent (16) + row px (10): the child glyph rail */}
             {!isCollapsed && folder.requests.length === 0 && folder.folders.length === 0 &&
                 <Text size="xs" c="dark.2" style={{paddingLeft: `${26 + depth * 16}px`}} py={2}>
-                    Empty folder
+                    Empty — right-click to add a request
                 </Text>}
         </Box>
     );
@@ -151,15 +159,17 @@ const treeCollision: CollisionDetection = (args) => {
     return hits.length ? hits : closestCenter(args);
 };
 
-/** Makes the collection header a drop target for "move back to root". */
-function RootDropZone({colId, children}: {colId: string; children: ReactNode}) {
+/** Makes the collection header a drop target for "move back to root". Cross-
+ *  collection moves aren't supported, so an invalid drop shows a not-allowed cue
+ *  instead of the (misleading) valid outline. */
+function RootDropZone({colId, valid, children}: {colId: string; valid: boolean; children: ReactNode}) {
     const {setNodeRef, isOver} = useDroppable({id: `colroot:${colId}`});
-    return (
-        <Box ref={setNodeRef}
-            style={isOver ? {outline: '1px solid var(--mantine-color-violet-4)', borderRadius: 'var(--mantine-radius-sm)'} : undefined}>
-            {children}
-        </Box>
-    );
+    const style = isOver
+        ? valid
+            ? {outline: '1px solid var(--mantine-color-violet-4)', borderRadius: 'var(--mantine-radius-sm)'}
+            : {outline: '1px dashed var(--mantine-color-red-4)', borderRadius: 'var(--mantine-radius-sm)', cursor: 'not-allowed'}
+        : undefined;
+    return <Box ref={setNodeRef} style={style}>{children}</Box>;
 }
 
 // ── Main component ───────────────────────────────────────────────────
@@ -171,6 +181,9 @@ export function CollectionsSection(p: Props) {
     const [filter, setFilter] = useState('');
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
     const [activeId, setActiveId] = useState<string | null>(null);
+    // Cascade delete confirm (folders/collections with children) — inline &
+    // styled, never a native confirm() or modal. Shows the child count.
+    const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
 
     const toggle = (key: string) => setCollapsed(prev => {
         const next = new Set(prev);
@@ -281,6 +294,7 @@ export function CollectionsSection(p: Props) {
                 onDeleteFolder={p.onDeleteFolder}
                 onCountFolder={p.onCountFolder}
                 onCreateFolder={p.onCreateFolder}
+                onCascadeDelete={setPendingDelete}
                 newFolder={newFolder}
                 setNewFolder={setNewFolder}
                 folderName={folderName}
@@ -339,6 +353,12 @@ export function CollectionsSection(p: Props) {
             onDragCancel={() => setActiveId(null)}
         >
             <Box>
+                {pendingDelete && (
+                    <DeleteConfirmBar
+                        pending={pendingDelete}
+                        onCancel={() => setPendingDelete(null)}
+                    />
+                )}
                 <Group justify="space-between" px="xs" mb={4} className="side-sec-head">
                     <SectionLabel>Collections</SectionLabel>
                     <ActionIcon size="sm" variant="subtle" color="gray" title="New collection"
@@ -385,17 +405,23 @@ export function CollectionsSection(p: Props) {
                         {label: 'New folder', onClick: () => { setNewFolder({colId: col.id, parentId: ''}); setFolderName(''); }},
                         {label: 'Delete', color: 'red', onClick: () => {
                             const n = countTree(col.folders, col.requests);
-                            if (n > 0 && !confirm(`Delete collection "${col.name}" and its ${n} request(s)?`))
-                                return;
-                            p.onDeleteCollection(col.id);
+                            if (n === 0) { p.onDeleteCollection(col.id); return; }
+                            setPendingDelete({
+                                label: `collection "${col.name}"`,
+                                count: n,
+                                onConfirm: () => { p.onDeleteCollection(col.id); },
+                            });
                         }},
                     ];
                     return (
                     <Box key={col.id}>
-                        <RootDropZone colId={col.id}>
+                        <RootDropZone colId={col.id}
+                            valid={!activeId || findOwningCollection(p.collections, activeId)?.id === col.id}>
                         <Group gap={4} px="xs" py={3} className="side-row" wrap="nowrap"
                             data-sidebar-row={`col:${col.id}`} tabIndex={-1}
+                            role="button" aria-expanded={!collapsed.has(col.id)} aria-label={col.name}
                             style={{minHeight: 32, borderRadius: 'var(--mantine-radius-sm)'}}
+                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(col.id); } }}
                             onContextMenu={e => { e.preventDefault(); openSidebarMenu(e.clientX, e.clientY, colActions); }}>
                             <UnstyledButton onClick={() => toggle(col.id)}
                                 style={{flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 4}}
@@ -479,6 +505,38 @@ export function CollectionsSection(p: Props) {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
+
+/** Inline, non-modal confirm for cascade deletes. Sticks to the top of the
+ *  scroll so it stays visible wherever the row was; shows the child count. */
+function DeleteConfirmBar({pending, onCancel}: {pending: PendingDelete; onCancel: () => void}) {
+    return (
+        <Box
+            mx="xs" mb="xs" p="xs"
+            style={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 5,
+                background: 'var(--mantine-color-dark-5)',
+                border: '1px solid var(--mantine-color-red-4)',
+                borderRadius: 'var(--mantine-radius-sm)',
+            }}
+        >
+            <Text size="xs" c="dark.1" mb={6}>
+                Delete <Text span fw={600} c="dark.0">{pending.label}</Text> and its{' '}
+                {pending.count} request{pending.count === 1 ? '' : 's'}?
+            </Text>
+            <Group gap="xs" justify="flex-end">
+                <Button size="compact-xs" variant="default" onClick={onCancel}>Cancel</Button>
+                <Button
+                    size="compact-xs" color="red" variant="outline"
+                    onClick={() => { pending.onConfirm(); onCancel(); }}
+                >
+                    Delete
+                </Button>
+            </Group>
+        </Box>
+    );
+}
 
 /** DragOverlay preview — a compact ghost of the row being dragged. */
 function DragPreview({activeId, collections}: {activeId: string; collections: main.Collection[]}) {
@@ -581,7 +639,7 @@ function FolderNameForm({name, onChange, onCancel, onSubmit, depth}: {
                     autoFocus
                 />
                 <ActionIcon size="xs" variant="subtle" color="gray" title="Cancel"
-                    onClick={onCancel}>x</ActionIcon>
+                    onClick={onCancel}><IconX size={13}/></ActionIcon>
             </Group>
         </form>
     );

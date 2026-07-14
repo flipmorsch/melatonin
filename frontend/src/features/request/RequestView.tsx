@@ -1,8 +1,12 @@
 import {ReactNode, useEffect, useRef} from 'react';
 import {
-    Accordion, ActionIcon, Badge, Box, Button, Checkbox, Group,
-    NativeSelect, NumberInput, PasswordInput, Select, Stack, Tabs, Text, TextInput,
+    Accordion, ActionIcon, Badge, Box, Button, Checkbox, Group, Menu,
+    NumberInput, PasswordInput, Select, Stack, Tabs, Text, TextInput, Tooltip, VisuallyHidden,
 } from '@mantine/core';
+import {IconDeviceFloppy, IconPlus} from '@tabler/icons-react';
+
+// Platform-aware shortcut label (Linux/Windows: Ctrl, macOS: ⌘).
+const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl';
 import {SendRequest} from '../../../wailsjs/go/main/App';
 import {main} from '../../../wailsjs/go/models';
 import {looksJson, METHODS} from '../../lib/kv';
@@ -23,9 +27,16 @@ interface Props {
     onSent: () => void;
     /** Set by parent to skip the first auto-save after loading a saved request. */
     justLoadedRef: React.MutableRefObject<boolean>;
+    /** Collections offered as targets when promoting a scratch/history tab. */
+    collections: main.Collection[];
+    /** Promote the current (scratch/history) request into an existing collection. */
+    onSaveToCollection: (colId: string, req: main.SavedRequest) => void;
+    /** Promote the current request into a brand-new collection. */
+    onSaveToNewCollection: (req: main.SavedRequest) => void;
 }
 
-export function RequestView({tab, dispatch, variables, onSave, onSent, justLoadedRef}: Props) {
+export function RequestView({tab, dispatch, variables, onSave, onSent, justLoadedRef,
+    collections, onSaveToCollection, onSaveToNewCollection}: Props) {
     // Flush pending debounced save on unmount
     const pendingRef = useRef<{timer: number; colId: string; req: main.SavedRequest} | null>(null);
     useEffect(() => () => {
@@ -76,6 +87,20 @@ export function RequestView({tab, dispatch, variables, onSave, onSent, justLoade
     const optionsCount =
         (Number(timeoutSec) > 0 ? 1 : 0) + (noRedirects ? 1 : 0) + (skipTls ? 1 : 0);
 
+    // Snapshot the current fields as a SavedRequest (blank id = new record).
+    const buildRequest = (id: string): main.SavedRequest => main.SavedRequest.createFrom({
+        id,
+        name: name || url || 'Untitled',
+        method, url,
+        params: rowsToKV(params),
+        headers: rowsToKV(headers),
+        body,
+        auth: auth(),
+        options: options(),
+        preRequestScript: preScript,
+        postResponseScript: postScript,
+    });
+
     // ── Auto-save (debounced, 600ms after last edit) ──
 
     useEffect(() => {
@@ -114,6 +139,7 @@ export function RequestView({tab, dispatch, variables, onSave, onSent, justLoade
         authType, authToken, authUser, authPass, timeoutSec, noRedirects, skipTls, preScript, postScript]);
 
     async function send() {
+        if (!url.trim()) return; // both the Send button and Ctrl+Enter honor this guard
         dispatch({type: 'SET_SENDING', sending: true});
         dispatch({type: 'SET_ERROR', error: ''});
         dispatch({type: 'SET_RESPONSE', response: null});
@@ -179,7 +205,7 @@ export function RequestView({tab, dispatch, variables, onSave, onSent, justLoade
     const addIcon = (section: 'params' | 'headers') => (
         <ActionIcon size="sm" variant="subtle" color="gray" mx="xs"
             title={`Add ${section === 'params' ? 'param' : 'header'} row`}
-            onClick={() => addRow(section)}>+</ActionIcon>
+            onClick={() => addRow(section)}><IconPlus size={16}/></ActionIcon>
     );
 
     return (
@@ -196,8 +222,36 @@ export function RequestView({tab, dispatch, variables, onSave, onSent, justLoade
                     <Text size="xs" ff="monospace" c={saveState === 'saving' ? 'dark.2' : 'yellow.4'}
                         title={saveState === 'saving' ? 'Saving…' : 'Modified'}
                         style={{flexShrink: 0, userSelect: 'none'}}>
-                        {saveState === 'saving' ? '●' : '○'}
+                        ●
                     </Text>}
+                {type === 'saved' &&
+                    <VisuallyHidden role="status" aria-live="polite">
+                        {saveState === 'saved' ? 'Saved'
+                            : saveState === 'saving' ? 'Saving' : 'Unsaved changes'}
+                    </VisuallyHidden>}
+                {type !== 'saved' &&
+                    <Menu position="bottom-end" width={220} withinPortal>
+                        <Menu.Target>
+                            <Button size="xs" variant="default" leftSection={<IconDeviceFloppy size={14}/>}
+                                style={{flexShrink: 0}}>
+                                Save to…
+                            </Button>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                            <Menu.Label>Save to collection</Menu.Label>
+                            {collections.map(c => (
+                                <Menu.Item key={c.id}
+                                    onClick={() => onSaveToCollection(c.id, buildRequest(''))}>
+                                    {c.name}
+                                </Menu.Item>
+                            ))}
+                            {collections.length > 0 && <Menu.Divider/>}
+                            <Menu.Item leftSection={<IconPlus size={14}/>}
+                                onClick={() => onSaveToNewCollection(buildRequest(''))}>
+                                New collection
+                            </Menu.Item>
+                        </Menu.Dropdown>
+                    </Menu>}
             </Group>
 
             <form onSubmit={e => { e.preventDefault(); send(); }}>
@@ -219,7 +273,9 @@ export function RequestView({tab, dispatch, variables, onSave, onSent, justLoade
                         autoFocus
                         aria-label="Request URL"
                     />
-                    <Button type="submit" loading={sending} disabled={!url}>Send</Button>
+                    <Tooltip label={`Send · ${MOD}+Enter`} openDelay={500} disabled={!url}>
+                        <Button type="submit" loading={sending} disabled={!url}>Send</Button>
+                    </Tooltip>
                 </Group>
             </form>
 

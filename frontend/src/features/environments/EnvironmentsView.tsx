@@ -1,5 +1,6 @@
-import {useState} from 'react';
-import {ActionIcon, Box, Button, Group, ScrollArea, Stack, Text, Textarea, TextInput} from '@mantine/core';
+import {useEffect, useRef, useState} from 'react';
+import {ActionIcon, Box, Group, ScrollArea, Stack, Text, Textarea, TextInput, VisuallyHidden} from '@mantine/core';
+import {IconPlus} from '@tabler/icons-react';
 import {main} from '../../../wailsjs/go/models';
 import {kvToText, parseKV} from '../../lib/kv';
 import {ConfirmDelete} from '../../components/ConfirmDelete';
@@ -18,13 +19,30 @@ export function EnvironmentsView({envSet, onSave, onDelete}: Props) {
     const [name, setName] = useState('');
     const [varsText, setVarsText] = useState('');
     const [error, setError] = useState('');
+    const [saveState, setSaveState] = useState<'saved' | 'dirty' | 'saving'>('saved');
 
     const environments = envSet?.environments ?? [];
 
+    // Debounced auto-save, mirroring requests & mocks — no Save button, and no
+    // silent loss when switching environments or navigating away.
+    const pending = useRef<{timer: number; env: main.Environment} | null>(null);
+    const justLoaded = useRef(false);
+
+    function flushPending() {
+        if (!pending.current) return;
+        clearTimeout(pending.current.timer);
+        const {env} = pending.current;
+        pending.current = null;
+        onSave(env).catch(e => setError(String(e)));
+    }
+
     function select(env: main.Environment) {
+        flushPending();
+        justLoaded.current = true;
         setSelectedId(env.id);
         setName(env.name);
         setVarsText(kvToText(env.variables));
+        setSaveState('saved');
         setError('');
     }
 
@@ -37,15 +55,8 @@ export function EnvironmentsView({envSet, onSave, onDelete}: Props) {
         }
     }
 
-    async function save() {
-        try {
-            await onSave({id: selectedId, name, variables: parseKV(varsText)});
-        } catch (e) {
-            setError(String(e));
-        }
-    }
-
     async function remove() {
+        flushPending();
         try {
             await onDelete(selectedId);
             setSelectedId('');
@@ -54,13 +65,32 @@ export function EnvironmentsView({envSet, onSave, onDelete}: Props) {
         }
     }
 
+    // Auto-save 600ms after the last edit; skips the initial load of a record.
+    useEffect(() => {
+        if (!selectedId) return;
+        if (justLoaded.current) { justLoaded.current = false; setSaveState('saved'); return; }
+        setSaveState('dirty');
+        if (pending.current) clearTimeout(pending.current.timer);
+        const env: main.Environment = {id: selectedId, name, variables: parseKV(varsText)};
+        const timer = window.setTimeout(() => {
+            pending.current = null;
+            setSaveState('saving');
+            onSave(env).then(() => setSaveState('saved')).catch(e => setError(String(e)));
+        }, 600);
+        pending.current = {timer, env};
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [name, varsText]);
+
+    // Flush on unmount (e.g. "Back to requests" leaves the view).
+    useEffect(() => flushPending, []);
+
     return (
         <Group gap="md" align="stretch" wrap="nowrap" style={{flex: 1, minHeight: 0}}>
             <Box w={230} style={{borderRight: '1px solid var(--mantine-color-dark-4)'}} pr="sm">
                 <Group justify="space-between" px="xs" mb={4}>
                     <SectionLabel>Environments</SectionLabel>
                     <ActionIcon size="sm" variant="subtle" color="gray" title="New environment"
-                        onClick={add}>+</ActionIcon>
+                        onClick={add}><IconPlus size={16}/></ActionIcon>
                 </Group>
                 <ScrollArea type="never">
                     {environments.length === 0 &&
@@ -89,7 +119,13 @@ export function EnvironmentsView({envSet, onSave, onDelete}: Props) {
                             placeholder="Environment name"
                             aria-label="Environment name"
                         />
-                        <Button onClick={save}>Save</Button>
+                        {saveState !== 'saved' &&
+                            <Text size="xs" ff="monospace" c={saveState === 'saving' ? 'dark.2' : 'yellow.4'}
+                                title={saveState === 'saving' ? 'Saving…' : 'Modified'}
+                                style={{flexShrink: 0, userSelect: 'none'}}>●</Text>}
+                        <VisuallyHidden role="status" aria-live="polite">
+                            {saveState === 'saved' ? 'Saved' : saveState === 'saving' ? 'Saving' : 'Unsaved changes'}
+                        </VisuallyHidden>
                         <ConfirmDelete variant="button" onConfirm={remove}/>
                     </Group>
                     {error && <Text size="sm" ff="monospace" c="red.4">{error}</Text>}

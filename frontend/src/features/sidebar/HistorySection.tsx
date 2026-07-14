@@ -51,7 +51,7 @@ export function HistorySection(p: Props) {
             </Group>
 
             {!p.collapsed && p.entries.length === 0 &&
-                <EmptyState>Sent requests will show up here</EmptyState>}
+                <EmptyState>Send a request to start your history</EmptyState>}
 
             {!p.collapsed && p.entries.map(e =>
                 <SidebarRow
@@ -59,6 +59,7 @@ export function HistorySection(p: Props) {
                     rowId={`hist:${e.id}`}
                     selected={p.selectedId === e.id}
                     onClick={() => p.onSelect(e)}
+                    left={<MethodBadge method={e.request.method}/>}
                     label={pathOf(e.request.url)}
                     right={<>
                         {outcome(e)}

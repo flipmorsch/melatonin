@@ -1,7 +1,32 @@
 import {useEffect, useMemo, useState} from 'react';
 import {flushSync} from 'react-dom';
-import {AppShell, Box, Button, Group, Select, Text} from '@mantine/core';
+import {ActionIcon, AppShell, Box, Button, Group, Select, Text, Tooltip, UnstyledButton} from '@mantine/core';
+import {IconSearch, IconX} from '@tabler/icons-react';
 import {main} from '../wailsjs/go/models';
+import {ClipboardSetText} from '../wailsjs/runtime/runtime';
+
+// Show the platform's real palette shortcut (Linux/Windows: Ctrl, macOS: ⌘).
+const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl';
+
+// Locate a request in a collection tree with its parent folder id ('' = root),
+// so an undo can restore it in place.
+function findRequestLoc(cols: main.Collection[], colId: string, reqId: string):
+    {req: main.SavedRequest; parentFolderId: string} | null {
+    const col = cols.find(c => c.id === colId);
+    if (!col) return null;
+    const root = (col.requests ?? []).find(r => r.id === reqId);
+    if (root) return {req: root, parentFolderId: ''};
+    const search = (folders: main.FolderNode[]): {req: main.SavedRequest; parentFolderId: string} | null => {
+        for (const f of folders) {
+            const hit = (f.requests ?? []).find(r => r.id === reqId);
+            if (hit) return {req: hit, parentFolderId: f.id};
+            const deep = search(f.folders ?? []);
+            if (deep) return deep;
+        }
+        return null;
+    };
+    return search(col.folders ?? []);
+}
 import {Brand} from './components/Brand';
 import {Sidebar} from './features/sidebar/Sidebar';
 import {RequestView} from './features/request/RequestView';
@@ -15,7 +40,6 @@ import {useMocks} from './hooks/useMocks';
 import {useTabs} from './hooks/useTabs';
 import {useEvent} from './hooks/useEvent';
 import {TabStrip} from './features/tabs/TabStrip';
-import {TabCloseModal} from './features/tabs/TabCloseModal';
 import {CommandPalette, PaletteItem} from './components/CommandPalette';
 import {MethodBadge} from './components/MethodBadge';
 import {RunDot} from './components/RunDot';
@@ -34,6 +58,8 @@ function App() {
     const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
     const [shellError, setShellError] = useState('');
     const [paletteOpen, setPaletteOpen] = useState(false);
+    const [undoState, setUndoState] = useState<
+        {label: string; restore: () => Promise<unknown>} | null>(null);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('sidebarCollapsed') === 'true');
     const [sidebarWidth, setSidebarWidth] = useState(() => {
         const saved = localStorage.getItem('sidebarWidth');
@@ -42,8 +68,7 @@ function App() {
 
     // ── Tabs ──
     const {state: tabsState, active, dispatch: tabDispatch,
-        pendingRef, justLoadedRef, flushPending, isDirty} = useTabs();
-    const [closeModal, setCloseModal] = useState<{idx: number} | null>(null);
+        pendingRef, justLoadedRef, flushPending} = useTabs();
 
     function selectTab(idx: number) {
         if (idx === tabsState.activeIdx) return;
@@ -53,32 +78,14 @@ function App() {
         tabDispatch({type: 'SET_ACTIVE', idx});
     }
 
+    // Auto-save makes closing safe: flush any pending edit, then close. No
+    // "unsaved changes" prompt — there is no pre-edit snapshot to discard to.
     function requestCloseTab(idx: number) {
         if (tabsState.tabs[idx]?.type === 'scratch') return;
-        if (isDirty(idx)) {
-            setCloseModal({idx});
-        } else {
-            closeTab(idx);
-        }
-    }
-
-    function closeTab(idx: number) {
         if (idx === tabsState.activeIdx && tabsState.tabs[idx]?.type === 'saved') {
             flushPending(cols.saveRequest);
         }
         tabDispatch({type: 'CLOSE_TAB', tabIdx: idx});
-    }
-
-    function handleCloseSave() {
-        const idx = closeModal!.idx;
-        closeTab(idx);
-        setCloseModal(null);
-    }
-
-    function handleCloseDiscard() {
-        const idx = closeModal!.idx;
-        closeTab(idx);
-        setCloseModal(null);
     }
 
     // ── Shared data ──
@@ -139,9 +146,42 @@ function App() {
         return () => window.removeEventListener('keydown', onKey);
     }, []);
 
+    // Undo bar auto-dismisses after a short window.
+    useEffect(() => {
+        if (!undoState) return;
+        const t = setTimeout(() => setUndoState(null), 6000);
+        return () => clearTimeout(t);
+    }, [undoState]);
+
     // ── Command palette ──
     const paletteItems: PaletteItem[] = useMemo(() => {
         const out: PaletteItem[] = [];
+
+        // Verbs first — the palette acts, it doesn't only navigate.
+        out.push(
+            {id: 'act:new-request', label: 'New request', detail: 'Open a scratch tab',
+                onSelect: () => { setView('request'); tabDispatch({type: 'OPEN_SCRATCH'}); }},
+            {id: 'act:new-mock', label: 'New mock server', detail: 'Create and edit a mock',
+                onSelect: () => run(addMock())},
+            {id: 'act:manage-envs', label: 'Manage environments', detail: 'Variables & active environment',
+                onSelect: () => setView('environments')},
+        );
+        for (const m of mocks.mocks) {
+            const p = mocks.running[m.id];
+            if (p) {
+                out.push({id: `act:stop:${m.id}`, label: `Stop mock: ${m.name}`,
+                    detail: `Running on port ${p}`, left: <RunDot on={true}/>,
+                    onSelect: () => run(mocks.stop(m.id))});
+                out.push({id: `act:baseurl:${m.id}`, label: `Use as {{baseUrl}}: ${m.name}`,
+                    detail: `http://127.0.0.1:${p} → active environment`,
+                    onSelect: () => useAsBaseUrl(`http://127.0.0.1:${p}`)});
+            } else {
+                out.push({id: `act:start:${m.id}`, label: `Start mock: ${m.name}`,
+                    detail: `Port ${m.port}`, left: <RunDot on={false}/>,
+                    onSelect: () => run(mocks.start(m.id))});
+            }
+        }
+
         for (const col of cols.collections) {
             function addReq(item: any, prefix: string) {
                 out.push({
@@ -232,6 +272,48 @@ function App() {
         run(mocks.loadLog(m.id));
     }
 
+    // One-click handoff: write a running mock's base URL into the active
+    // environment's {{baseUrl}} so requests can reuse it. Falls back to the
+    // clipboard when no environment is active. Returns a status line to show.
+    function useAsBaseUrl(baseUrl: string): string {
+        const active = environments.find(e => e.id === envs.envSet?.activeId);
+        if (!active) {
+            ClipboardSetText(baseUrl).catch(console.error);
+            return 'No active environment — copied to clipboard instead';
+        }
+        run(envs.save(main.Environment.createFrom({
+            ...active,
+            variables: {...(active.variables ?? {}), baseUrl},
+        })));
+        return `Set {{baseUrl}} = ${baseUrl} in "${active.name}"`;
+    }
+
+    // ── Promote a scratch/history tab into a collection ──
+    async function saveTabToCollection(colId: string, req: main.SavedRequest) {
+        const saved = await cols.saveRequest(colId, req);
+        selectRequest(colId, saved);
+    }
+    async function saveTabToNewCollection(req: main.SavedRequest) {
+        const col = await cols.create('Requests');
+        const saved = await cols.saveRequest(col.id, req);
+        selectRequest(col.id, saved);
+    }
+
+    // ── Undo the last delete (re-save the captured record) ──
+    function undoDelete() {
+        if (!undoState) return;
+        const {restore} = undoState;
+        setUndoState(null);
+        run(restore());
+    }
+
+    // Delete an environment, capturing an undo record (upsert-by-id restore).
+    async function deleteEnv(id: string) {
+        const env = environments.find(e => e.id === id);
+        await envs.remove(id);
+        if (env) setUndoState({label: env.name || 'environment', restore: () => envs.save(env)});
+    }
+
     function selectRoute(m: main.MockServer, routeId: string) {
         if (selectedMockId !== m.id) run(mocks.loadLog(m.id));
         setSelectedMockId(m.id);
@@ -250,10 +332,15 @@ function App() {
 
     function deleteRoute(m: main.MockServer, routeId: string) {
         if (selectedRouteId === routeId) setSelectedRouteId(null);
+        const route = (m.routes ?? []).find(r => r.id === routeId);
         run(mocks.save(main.MockServer.createFrom({
             ...m,
             routes: (m.routes ?? []).filter(r => r.id !== routeId),
         })));
+        setUndoState({
+            label: route ? `route ${route.method} ${route.path}` : 'route',
+            restore: () => mocks.save(m),
+        });
     }
 
     // ── Sidebar handlers ──
@@ -274,8 +361,14 @@ function App() {
             cols.countFolder(colId, folderId)),
         onAddRequest: useEvent((colId: string, parentFolderId?: string) =>
             run(addRequest(colId, parentFolderId))),
-        onDeleteRequest: useEvent((colId: string, reqId: string) =>
-            run(cols.removeRequest(colId, reqId))),
+        onDeleteRequest: useEvent((colId: string, reqId: string) => {
+            const loc = findRequestLoc(cols.collections, colId, reqId);
+            run(cols.removeRequest(colId, reqId));
+            if (loc) setUndoState({
+                label: loc.req.name || 'request',
+                restore: () => cols.saveRequest(colId, loc.req, loc.parentFolderId),
+            });
+        }),
         onReorderRequest: useEvent((colId: string, reqId: string, newParentID: string, newPos: number) =>
             run(cols.reorderRequest(colId, reqId, newParentID, newPos))),
         onReorderFolder: useEvent((colId: string, folderId: string, newParentID: string, newPos: number) =>
@@ -283,12 +376,14 @@ function App() {
         onSelectMock: useEvent(selectMock),
         onAddMock: useEvent(() => run(addMock())),
         onDeleteMock: useEvent((id: string) => {
+            const mock = mocks.mocks.find(m => m.id === id);
             if (selectedMockId === id) {
                 setSelectedMockId('');
                 setSelectedRouteId(null);
                 setView('request');
             }
             run(mocks.remove(id));
+            if (mock) setUndoState({label: mock.name || 'mock server', restore: () => mocks.save(mock)});
         }),
         onSelectRoute: useEvent(selectRoute),
         onAddRoute: useEvent((m: main.MockServer) => run(addRoute(m))),
@@ -315,8 +410,24 @@ function App() {
                 <Group justify="space-between" h="100%">
                     <Brand/>
                     <Group gap="xs">
+                        <Tooltip label={`Command palette (${MOD} K)`} openDelay={400}>
+                            <UnstyledButton
+                                onClick={() => setPaletteOpen(true)}
+                                aria-label={`Open command palette, ${MOD} K`}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 6,
+                                    padding: '3px 8px', borderRadius: 'var(--mantine-radius-sm)',
+                                    border: '1px solid var(--mantine-color-dark-4)',
+                                    color: 'var(--mantine-color-dark-2)',
+                                }}
+                            >
+                                <IconSearch size={13}/>
+                                <Text size="xs" ff="monospace">{MOD} K</Text>
+                            </UnstyledButton>
+                        </Tooltip>
                         <Select
                             size="xs"
+                            aria-label="Active environment"
                             value={envs.envSet?.activeId ?? ''}
                             onChange={v => v !== null && run(envs.setActive(v))}
                             data={[
@@ -361,6 +472,22 @@ function App() {
             <AppShell.Main style={{display: 'flex', flexDirection: 'column', height: '100vh'}}>
                 {shellError &&
                     <Text size="sm" ff="monospace" c="red.4" mb="xs">{shellError}</Text>}
+                {undoState &&
+                    <Group role="status" gap="sm" mb="xs" px="sm" py={6} wrap="nowrap"
+                        style={{
+                            background: 'var(--mantine-color-dark-5)',
+                            border: '1px solid var(--mantine-color-dark-4)',
+                            borderRadius: 'var(--mantine-radius-sm)',
+                        }}>
+                        <Text size="sm" c="dark.1" style={{flex: 1}} truncate>
+                            Deleted <Text span c="dark.0" fw={600}>{undoState.label}</Text>
+                        </Text>
+                        <Button size="compact-xs" variant="subtle" onClick={undoDelete}>Undo</Button>
+                        <ActionIcon size="sm" variant="subtle" color="gray"
+                            aria-label="Dismiss" onClick={() => setUndoState(null)}>
+                            <IconX size={15}/>
+                        </ActionIcon>
+                    </Group>}
                 {view === 'request' &&
                     <TabStrip
                         tabs={tabsState.tabs}
@@ -378,9 +505,12 @@ function App() {
                         onSave={(colId, req) => cols.saveRequest(colId, req)}
                         onSent={() => hist.reload().catch(console.error)}
                         justLoadedRef={justLoadedRef}
+                        collections={cols.collections}
+                        onSaveToCollection={(colId, req) => run(saveTabToCollection(colId, req))}
+                        onSaveToNewCollection={req => run(saveTabToNewCollection(req))}
                     />}
                 {view === 'environments' &&
-                    <EnvironmentsView envSet={envs.envSet} onSave={envs.save} onDelete={envs.remove}/>}
+                    <EnvironmentsView envSet={envs.envSet} onSave={envs.save} onDelete={deleteEnv}/>}
                 {view === 'history' && histDetail &&
                     <HistoryDetail entry={histDetail} onOpenInEditor={openHistoryInEditor}/>}
                 {view === 'mock' && selectedMock &&
@@ -393,18 +523,10 @@ function App() {
                         onStart={mocks.start}
                         onStop={mocks.stop}
                         onClearLog={id => run(mocks.clearLog(id))}
+                        onUseAsBaseUrl={useAsBaseUrl}
                     />}
             </AppShell.Main>
             <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={paletteItems}/>
-            {closeModal && (
-                <TabCloseModal
-                    open={true}
-                    tabName={tabsState.tabs[closeModal.idx]?.name ?? ''}
-                    onSave={handleCloseSave}
-                    onDiscard={handleCloseDiscard}
-                    onCancel={() => setCloseModal(null)}
-                />
-            )}
         </AppShell>
     );
 }

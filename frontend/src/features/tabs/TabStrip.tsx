@@ -1,4 +1,6 @@
+import {useRef} from 'react';
 import {ActionIcon, Box, Group, Scroller, Text, Tooltip} from '@mantine/core';
+import {IconPlus, IconX} from '@tabler/icons-react';
 import {TabState} from '../../hooks/useTabs';
 
 interface Props {
@@ -21,6 +23,22 @@ const methodColor = (m: string) => {
 };
 
 export function TabStrip({tabs, activeIdx, onSelect, onClose, onNewScratch}: Props) {
+    const tabRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+    // Roving tabindex: one tab stop, arrows move (and switch) between tabs.
+    function onTabKey(e: React.KeyboardEvent, i: number) {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+            e.preventDefault();
+            const dir = e.key === 'ArrowRight' ? 1 : -1;
+            const next = (i + dir + tabs.length) % tabs.length;
+            onSelect(next);
+            tabRefs.current[next]?.focus();
+        } else if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onSelect(i);
+        }
+    }
+
     return (
         <Box
             style={{
@@ -33,13 +51,20 @@ export function TabStrip({tabs, activeIdx, onSelect, onClose, onNewScratch}: Pro
             }}
         >
             <Scroller h="100%">
-                <Group gap={0} wrap="nowrap" h="100%" style={{alignItems: 'stretch'}}>
+                <Group gap={0} wrap="nowrap" h="100%" style={{alignItems: 'stretch'}}
+                    role="tablist" aria-label="Open request tabs">
                     {tabs.map((tab, i) => {
                         const active = i === activeIdx;
                         return (
                             <Tooltip key={tab.tabId} label={tab.label} openDelay={600} disabled={active}>
                                 <Box
+                                    ref={el => { tabRefs.current[i] = el; }}
+                                    role="tab"
+                                    aria-selected={active}
+                                    tabIndex={active ? 0 : -1}
+                                    className="tab-strip-tab"
                                     onClick={() => onSelect(i)}
+                                    onKeyDown={e => onTabKey(e, i)}
                                     style={{
                                         display: 'flex',
                                         alignItems: 'center',
@@ -92,6 +117,7 @@ export function TabStrip({tabs, activeIdx, onSelect, onClose, onNewScratch}: Pro
                                             size={16}
                                             variant="subtle"
                                             color="gray"
+                                            tabIndex={active ? 0 : -1}
                                             onClick={e => {
                                                 e.stopPropagation();
                                                 onClose(i);
@@ -99,7 +125,7 @@ export function TabStrip({tabs, activeIdx, onSelect, onClose, onNewScratch}: Pro
                                             title="Close tab"
                                             style={{flexShrink: 0}}
                                         >
-                                            <Text span size="xs" c="dark.3">✕</Text>
+                                            <IconX size={13} color="var(--mantine-color-dark-2)"/>
                                         </ActionIcon>
                                     )}
                                 </Box>
@@ -116,7 +142,7 @@ export function TabStrip({tabs, activeIdx, onSelect, onClose, onNewScratch}: Pro
                 title="New scratch tab"
                 style={{flexShrink: 0, borderLeft: '1px solid var(--mantine-color-dark-4)'}}
             >
-                <Text span size="sm" c="dark.2">+</Text>
+                <IconPlus size={16} color="var(--mantine-color-dark-2)"/>
             </ActionIcon>
         </Box>
     );
