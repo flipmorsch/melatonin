@@ -387,6 +387,7 @@ export function RequestView({tab, dispatch, variables, onSave, onSent, justLoade
                                         placeholder={'// Set headers, rewrite the body, change the method…'}
                                         variables={variables}
                                         scriptApi
+                                        javascript
                                         minHeight={160}
                                     />
                                     {response?.preScriptLog && response.preScriptLog.trim() ? (
@@ -411,6 +412,7 @@ export function RequestView({tab, dispatch, variables, onSave, onSent, justLoade
                                         placeholder={'// Inspect the response, set session variables…'}
                                         variables={variables}
                                         scriptApi
+                                        javascript
                                         minHeight={160}
                                     />
                                     {response?.postScriptLog && response.postScriptLog.trim() ? (
