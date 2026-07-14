@@ -1,6 +1,6 @@
 import {useEffect, useMemo, useState} from 'react';
 import {flushSync} from 'react-dom';
-import {AppShell, Box, Button, Group, NativeSelect, Text} from '@mantine/core';
+import {AppShell, Box, Button, Group, Select, Text} from '@mantine/core';
 import {main} from '../wailsjs/go/models';
 import {Brand} from './components/Brand';
 import {Sidebar} from './features/sidebar/Sidebar';
@@ -315,10 +315,10 @@ function App() {
                 <Group justify="space-between" h="100%">
                     <Brand/>
                     <Group gap="xs">
-                        <NativeSelect
+                        <Select
                             size="xs"
                             value={envs.envSet?.activeId ?? ''}
-                            onChange={e => run(envs.setActive(e.target.value))}
+                            onChange={v => v !== null && run(envs.setActive(v))}
                             data={[
                                 {value: '', label: 'No environment'},
                                 ...environments.map(env => ({value: env.id, label: env.name})),

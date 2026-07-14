@@ -34,9 +34,51 @@ export const theme = createTheme({
     primaryColor: 'violet',
     primaryShade: {light: 6, dark: 4},
     fontFamily: "'Nunito', system-ui, sans-serif",
-    fontFamilyMonospace: "'JetBrains Mono', ui-monospace, 'SF Mono', 'Fira Code', monospace",
+    fontFamilyMonospace: "'Iosevka', 'JetBrains Mono', ui-monospace, 'SF Mono', 'Fira Code', monospace",
     headings: {fontFamily: "'Nunito', system-ui, sans-serif", fontWeight: '700'},
-    defaultRadius: 'sm',
-    radius: {xs: '4px', sm: '6px', md: '8px', lg: '10px', xl: '14px'},
+    defaultRadius: 'xs',
+    radius: {xs: '3px', sm: '4px', md: '6px', lg: '8px', xl: '10px'},
     fontSizes: {xs: '12px', sm: '13.5px', md: '15px', lg: '17px', xl: '20px'},
+    spacing: {xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '24px'},
+
+    // Inject known CSS hooks on every component so app.css can target them.
+    // Mantine v9 uses hashed CSS module classes; classNames adds stable extras.
+    components: {
+        Button: {
+            classNames: {root: 'p-btn'},
+        },
+        TextInput: {
+            classNames: {input: 'p-inp'},
+        },
+        Select: {
+            classNames: {input: 'p-sel', dropdown: 'p-drop', option: 'p-opt'},
+        },
+        NumberInput: {
+            classNames: {input: 'p-num'},
+        },
+        PasswordInput: {
+            classNames: {input: 'p-pwd', innerInput: 'p-pwd-inner'},
+        },
+        Textarea: {
+            classNames: {input: 'p-area'},
+        },
+        Checkbox: {
+            classNames: {input: 'p-chk'},
+        },
+        Badge: {
+            classNames: {root: 'p-badge'},
+        },
+        Tabs: {
+            classNames: {tab: 'p-tab', list: 'p-tab-list'},
+        },
+        Accordion: {
+            classNames: {control: 'p-acc', item: 'p-acc-item'},
+        },
+        AppShell: {
+            classNames: {navbar: 'p-shell-nav'},
+        },
+        Combobox: {
+            classNames: {dropdown: 'p-drop', option: 'p-opt'},
+        },
+    },
 });

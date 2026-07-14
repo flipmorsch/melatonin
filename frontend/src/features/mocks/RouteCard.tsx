@@ -1,4 +1,4 @@
-import {Group, NativeSelect, Paper, Stack, Text, Textarea, TextInput} from '@mantine/core';
+import {Group, Paper, Select, Stack, Text, Textarea, TextInput} from '@mantine/core';
 import {looksJson, METHODS} from '../../lib/kv';
 import {CodeEditor} from '../../components/CodeEditor';
 
@@ -21,10 +21,10 @@ export function RouteCard({draft, onChange}: Props) {
         <Paper withBorder radius="lg" p="sm" bg="dark.6" style={{flexShrink: 0}}>
             <Stack gap="xs">
                 <Group gap="xs" wrap="nowrap">
-                    <NativeSelect
+                    <Select
                         w={110} size="xs" className="mono-input"
                         value={draft.method}
-                        onChange={e => onChange({method: e.target.value})}
+                        onChange={v => v !== null && onChange({method: v})}
                         data={METHODS}
                         aria-label="Route method"
                     />

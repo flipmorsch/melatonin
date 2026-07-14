@@ -1,7 +1,7 @@
 import {ReactNode, useEffect, useRef} from 'react';
 import {
     Accordion, ActionIcon, Badge, Box, Button, Checkbox, Group,
-    NativeSelect, NumberInput, PasswordInput, Stack, Tabs, Text, TextInput,
+    NativeSelect, NumberInput, PasswordInput, Select, Stack, Tabs, Text, TextInput,
 } from '@mantine/core';
 import {SendRequest} from '../../../wailsjs/go/main/App';
 import {main} from '../../../wailsjs/go/models';
@@ -202,11 +202,11 @@ export function RequestView({tab, dispatch, variables, onSave, onSent, justLoade
 
             <form onSubmit={e => { e.preventDefault(); send(); }}>
                 <Group gap="xs" wrap="nowrap">
-                    <NativeSelect
+                    <Select
                         w={110}
                         className="mono-input"
                         value={method}
-                        onChange={e => u('method', e.target.value)}
+                        onChange={v => v !== null && u('method', v)}
                         data={METHODS}
                         aria-label="HTTP method"
                     />
@@ -274,11 +274,11 @@ export function RequestView({tab, dispatch, variables, onSave, onSent, justLoade
                             <Accordion.Panel>
                                 <Stack gap="xs">
                                     <Group gap="xs" wrap="nowrap">
-                                        <NativeSelect
+                                        <Select
                                             w={140}
                                             size="xs"
                                             value={authType}
-                                            onChange={e => u('authType', e.target.value)}
+                                            onChange={v => u('authType', v || '')}
                                             data={[
                                                 {value: '', label: 'No auth'},
                                                 {value: 'bearer', label: 'Bearer token'},
